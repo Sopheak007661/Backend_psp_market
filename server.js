@@ -6,11 +6,17 @@ const cors = require('cors');
 
 const app = express();
 
-// មុខងារ Middleware ដើម្បីឱ្យ Express អាចអាន JSON និង CORS បាន
-app.use(cors());
+// ១. ការកំណត់ CORS ឱ្យដើរជាមួយ Frontend (Netlify)
+// អ្នកអាចប្ដូរ '*' ទៅជា URL របស់ Netlify របស់អ្នកនៅពេលក្រោយដើម្បីសុវត្ថិភាពខ្ពស់ (ឧទាហរណ៍៖ 'https://your-app.netlify.app')
+app.use(cors({
+    origin: 'https://pspmarketonline.netlify.app/', 
+    methods: ['GET', 'POST', 'DELETE', 'PUT'],
+    credentials: true
+}));
+
 app.use(express.json());
 
-// ១. ការភ្ជាប់ទៅកាន់ Database Pool
+// ២. ការភ្ជាប់ទៅកាន់ Database Pool (បានបន្ថែម SSL សម្រាប់ Aiven Cloud)
 const db = mysql.createPool({
     host: process.env.DB_HOST,          
     user: process.env.DB_USER,          
@@ -19,10 +25,14 @@ const db = mysql.createPool({
     port: process.env.DB_PORT || 3306,
     waitForConnections: true,
     connectionLimit: 10,
-    queueLimit: 0
+    queueLimit: 0,
+    // ចំណុចសំខាន់បំផុតសម្រាប់ Aiven Cloud គឺត្រង់នេះ 👇
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
 
-// ២. ពិនិត្យការភ្ជាប់ខ្សែ និងបង្កើត Table 'products' ដោយស្វ័យប្រវត្តិតែម្តង
+// ៣. ពិនិត្យការភ្ជាប់ខ្សែ និងបង្កើត Table 'products' ដោយស្វ័យប្រវត្តិតែម្តង
 db.getConnection((err, connection) => {
     if (err) {
         console.error('Database connection failed: ' + err.message);
@@ -104,7 +114,7 @@ app.delete('/api/products/:id', (req, res) => {
     });
 });
 
-// ៣. ដំណើរការ Server ឱ្យស្តាប់ការហៅចូល (ដកកូដស្ទួនចេញរួចរាល់)
+// ៤. ដំណើរការ Server ឱ្យស្តាប់ការហៅចូល
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
