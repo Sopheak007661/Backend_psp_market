@@ -9,7 +9,10 @@ const app = express();
 // ១. ការកំណត់ CORS ឱ្យដើរជាមួយ Frontend (Netlify)
 // អ្នកអាចប្ដូរ '*' ទៅជា URL របស់ Netlify របស់អ្នកនៅពេលក្រោយដើម្បីសុវត្ថិភាពខ្ពស់ (ឧទាហរណ៍៖ 'https://your-app.netlify.app')
 app.use(cors({
-    origin: 'https://pspmarketonline.netlify.app/', 
+    origin: [
+        'https://pspmarketonline.netlify.app', // លុបសញ្ញា / នៅខាងចុងចេញ
+        'http://localhost:5173'                // បន្ថែមនេះដើម្បីឱ្យអ្នកអាចតេស្តនៅលើម៉ាស៊ីនខ្លួនឯងបានដោយមិនលោត Error
+    ], 
     methods: ['GET', 'POST', 'DELETE', 'PUT'],
     credentials: true
 }));
