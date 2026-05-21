@@ -1,4 +1,3 @@
-// 1. Put this at the absolute top of server.js
 require('dotenv').config();
 
 const express = require('express');
@@ -7,7 +6,11 @@ const cors = require('cors');
 
 const app = express();
 
-// 2. Paste your updated database configuration here
+// មុខងារ Middleware ដើម្បីឱ្យ Express អាចអាន JSON និង CORS បាន
+app.use(cors());
+app.use(express.json());
+
+// ១. ការភ្ជាប់ទៅកាន់ Database Pool
 const db = mysql.createPool({
     host: process.env.DB_HOST,          
     user: process.env.DB_USER,          
@@ -19,27 +22,39 @@ const db = mysql.createPool({
     queueLimit: 0
 });
 
-// ... your API routes (app.get, app.post, etc.) go here ...
-
-// 3. Update your app listen at the bottom of server.js
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
-
-// Test connection
+// ២. ពិនិត្យការភ្ជាប់ខ្សែ និងបង្កើត Table 'products' ដោយស្វ័យប្រវត្តិតែម្តង
 db.getConnection((err, connection) => {
     if (err) {
         console.error('Database connection failed: ' + err.message);
     } else {
         console.log('Connected to MySQL Database.');
-        connection.release();
+        
+        // បើកការបង្កើតតារាង products បើមិនទាន់មាននៅក្នុង Aiven Cloud
+        const createTableQuery = `
+        CREATE TABLE IF NOT EXISTS products (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            price DECIMAL(10, 2) NOT NULL,
+            category VARCHAR(100) NOT NULL,
+            description TEXT,
+            image LONGTEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );`;
+
+        connection.query(createTableQuery, (tableErr) => {
+            if (tableErr) {
+                console.error('Error creating table: ', tableErr.message);
+            } else {
+                console.log('Products table checked/created successfully!');
+            }
+            connection.release(); // ផ្តាច់ការទាក់ទងបណ្តោះអាសន្នដើម្បីទុកឱ្យ API ប្រើ
+        });
     }
 });
 
-// ---------------- API ENDPOINTS ----------------
+// ------------------- API ENDPOINTS -------------------
 
-// 1. GET: Fetch all products from the database
+// ១. GET: ទាញយកផលិតផលទាំងអស់ពី Database
 app.get('/api/products', (req, res) => {
     const sql = 'SELECT * FROM products ORDER BY id DESC';
     db.query(sql, (err, results) => {
@@ -50,7 +65,7 @@ app.get('/api/products', (req, res) => {
     });
 });
 
-// 2. POST: Insert a new product into the database
+// ២. POST: បញ្ចូលផលិតផលថ្មីទៅក្នុង Database
 app.post('/api/products', (req, res) => {
     const { name, price, category, description, image } = req.body;
     
@@ -73,7 +88,7 @@ app.post('/api/products', (req, res) => {
     });
 });
 
-// 3. DELETE: Remove a product by ID
+// ៣. DELETE: លុបផលិតផលតាម ID
 app.delete('/api/products/:id', (req, res) => {
     const { id } = req.params;
     const sql = 'DELETE FROM products WHERE id = ?';
@@ -89,7 +104,8 @@ app.delete('/api/products/:id', (req, res) => {
     });
 });
 
-// Start the server
+// ៣. ដំណើរការ Server ឱ្យស្តាប់ការហៅចូល (ដកកូដស្ទួនចេញរួចរាល់)
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
