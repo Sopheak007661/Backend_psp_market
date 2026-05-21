@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>string</title>
+</head>
+<body>
+    <script>
+        //result 
+            //Big letter : ... Number : ...
+            //Small letter : ... Number : ...
+        const Name = "Cambodia Japan Hongkong Hungary";
+        //being string to array to can ues Fillter property
+        let strName = Name.split("");
+       let bigLetter =  strName.filter((value)=>{
+            if(!value==' '&& (value==value.toUpperCase())){
+                 if(value==' '){
+                    return value = undefined;
+                }
+                return value;
+            }
+       }).join("");
+       console.log(`Big letter : ${bigLetter} , Number : ${bigLetter.length}`);
+       
+       let smallLetter =  strName.filter((value)=>{
+            if(!value==''&& (value==value.toLowerCase())){
+                if(value==' '){
+                    return value = undefined;
+                }
+                return value;
+            }
+
+       }).join("");
+       console.log(`Big letter : ${smallLetter} , Number : ${smallLetter.length}`);
+       
+       let spaceLetter =  strName.filter((value)=>{
+            if(value==' '){
+                return value;
+            }
+       }).join("");
+       console.log(`Number space : ${spaceLetter.length} space`);
+       const name = {Name:"SOheak",Age:12};
+       
+
+    </script>
+</body>
+</html>
