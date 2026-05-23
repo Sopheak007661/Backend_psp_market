@@ -384,6 +384,38 @@ app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
 
+// GET: Tap-to-confirm link from Telegram (no bot needed)
+app.get('/api/payments/confirm-link', (req, res) => {
+    const { secret, sessionId } = req.query;
+
+    if (!secret || secret !== process.env.CONFIRM_SECRET) {
+        return res.status(403).send('❌ Unauthorized');
+    }
+
+    if (!sessionId) {
+        return res.status(400).send('❌ Missing sessionId');
+    }
+
+    const sql = `UPDATE payment_sessions SET status = 'paid' 
+                 WHERE session_id = ? AND status = 'pending'`;
+
+    db.query(sql, [sessionId], (err, result) => {
+        if (err) return res.status(500).send('❌ Database error');
+        if (result.affectedRows === 0) {
+            return res.send('⚠️ Already confirmed or session not found');
+        }
+        console.log(`[PAYMENT] ✅ Confirmed via link: ${sessionId}`);
+        // Simple success page that shows in Telegram browser
+        res.send(`
+            <html><body style="font-family:sans-serif;text-align:center;padding:40px">
+                <h1>✅ Payment Confirmed!</h1>
+                <p>Session: <b>${sessionId}</b></p>
+                <p style="color:green;font-size:20px">Customer order is now processing.</p>
+            </body></html>
+        `);
+    });
+});
+
 /*
 ==============================================
   🤖 TELEGRAM BOT INTEGRATION GUIDE
@@ -424,3 +456,8 @@ have it call /api/payments/confirm like this:
 
 ==============================================
 */
+
+
+
+
+
