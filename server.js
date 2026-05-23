@@ -1,383 +1,151 @@
-// require('dotenv').config();
-
-// const express = require('express');
-// const mysql = require('mysql2');
-// const cors = require('cors');
-
-// const app = express();
-
-// // ១. ការកំណត់ CORS ឱ្យដើរជាមួយ Frontend (Netlify)
-// // អ្នកអាចប្ដូរ '*' ទៅជា URL របស់ Netlify របស់អ្នកនៅពេលក្រោយដើម្បីសុវត្ថិភាពខ្ពស់ (ឧទាហរណ៍៖ 'https://your-app.netlify.app')
-// app.use(cors({
-//     origin: [
-//         'https://pspmarketonline.netlify.app', // លុបសញ្ញា / នៅខាងចុងចេញ
-//         'http://localhost:5173'                // បន្ថែមនេះដើម្បីឱ្យអ្នកអាចតេស្តនៅលើម៉ាស៊ីនខ្លួនឯងបានដោយមិនលោត Error
-//     ], 
-//     methods: ['GET', 'POST', 'DELETE', 'PUT'],
-//     credentials: true
-// }));
-
-// app.use(express.json());
-
-// // ២. ការភ្ជាប់ទៅកាន់ Database Pool (បានបន្ថែម SSL សម្រាប់ Aiven Cloud)
-// const db = mysql.createPool({
-//     host: process.env.DB_HOST,          
-//     user: process.env.DB_USER,          
-//     password: process.env.DB_PASSWORD,  
-//     database: process.env.DB_NAME,      
-//     port: process.env.DB_PORT || 3306,
-//     waitForConnections: true,
-//     connectionLimit: 10,
-//     queueLimit: 0,
-//     // ចំណុចសំខាន់បំផុតសម្រាប់ Aiven Cloud គឺត្រង់នេះ 👇
-//     ssl: {
-//         rejectUnauthorized: false
-//     }
-// });
-
-// // ៣. ពិនិត្យការភ្ជាប់ខ្សែ និងបង្កើត Table 'products' ដោយស្វ័យប្រវត្តិតែម្តង
-// db.getConnection((err, connection) => {
-//     if (err) {
-//         console.error('Database connection failed: ' + err.message);
-//     } else {
-//         console.log('Connected to MySQL Database.');
-        
-//         // បើកការបង្កើតតារាង products បើមិនទាន់មាននៅក្នុង Aiven Cloud
-//         const createTableQuery = `
-//         CREATE TABLE IF NOT EXISTS products (
-//             id INT AUTO_INCREMENT PRIMARY KEY,
-//             name VARCHAR(255) NOT NULL,
-//             price DECIMAL(10, 2) NOT NULL,
-//             category VARCHAR(100) NOT NULL,
-//             description TEXT,
-//             image LONGTEXT,
-//             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-//         );`;
-
-//         connection.query(createTableQuery, (tableErr) => {
-//             if (tableErr) {
-//                 console.error('Error creating table: ', tableErr.message);
-//             } else {
-//                 console.log('Products table checked/created successfully!');
-//             }
-//             connection.release(); // ផ្តាច់ការទាក់ទងបណ្តោះអាសន្នដើម្បីទុកឱ្យ API ប្រើ
-//         });
-//     }
-// });
-
-// // ------------------- API ENDPOINTS -------------------
-
-// // ១. GET: ទាញយកផលិតផលទាំងអស់ពី Database
-// app.get('/api/products', (req, res) => {
-//     const sql = 'SELECT * FROM products ORDER BY id DESC';
-//     db.query(sql, (err, results) => {
-//         if (err) {
-//             return res.status(500).json({ error: err.message });
-//         }
-//         res.json(results);
-//     });
-// });
-
-// // ២. POST: បញ្ចូលផលិតផលថ្មីទៅក្នុង Database
-// app.post('/api/products', (req, res) => {
-//     const { name, price, category, description, image } = req.body;
-    
-//     if (!name || !price) {
-//         return res.status(400).json({ error: 'Name and price are required' });
-//     }
-
-//     const sql = 'INSERT INTO products (name, price, category, description, image) VALUES (?, ?, ?, ?, ?)';
-//     const values = [name, price, category, description, image];
-
-//     db.query(sql, values, (err, result) => {
-//         if (err) {
-//             return res.status(500).json({ error: err.message });
-//         }
-//         res.status(201).json({ 
-//             message: 'Product added successfully', 
-//             id: result.insertId,
-//             product: { id: result.insertId, name, price, category, description, image }
-//         });
-//     });
-// });
-
-// // ៣. DELETE: លុបផលិតផលតាម ID
-// app.delete('/api/products/:id', (req, res) => {
-//     const { id } = req.params;
-//     const sql = 'DELETE FROM products WHERE id = ?';
-
-//     db.query(sql, [id], (err, result) => {
-//         if (err) {
-//             return res.status(500).json({ error: err.message });
-//         }
-//         if (result.affectedRows === 0) {
-//             return res.status(404).json({ message: 'Product not found' });
-//         }
-//         res.json({ message: 'Product deleted successfully' });
-//     });
-// });
-
-// // ៤. ដំណើរការ Server ឱ្យស្តាប់ការហៅចូល
-// const PORT = process.env.PORT || 5000;
-// app.listen(PORT, () => {
-//     console.log(`Server running on port ${PORT}`);
-// });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 require('dotenv').config();
 
 const express = require('express');
-const mysql   = require('mysql2');
-const cors    = require('cors');
+const mysql = require('mysql2');
+const cors = require('cors');
 
 const app = express();
 
-// ── CORS ──────────────────────────────────────────────────────
+// ១. ការកំណត់ CORS ឱ្យដើរជាមួយ Frontend (Netlify)
+// អ្នកអាចប្ដូរ '*' ទៅជា URL របស់ Netlify របស់អ្នកនៅពេលក្រោយដើម្បីសុវត្ថិភាពខ្ពស់ (ឧទាហរណ៍៖ 'https://your-app.netlify.app')
 app.use(cors({
     origin: [
-        'https://pspmarketonline.netlify.app',
-        'http://localhost:5173'
-    ],
+        'https://pspmarketonline.netlify.app', // លុបសញ្ញា / នៅខាងចុងចេញ
+        'http://localhost:5173'                // បន្ថែមនេះដើម្បីឱ្យអ្នកអាចតេស្តនៅលើម៉ាស៊ីនខ្លួនឯងបានដោយមិនលោត Error
+    ], 
     methods: ['GET', 'POST', 'DELETE', 'PUT'],
     credentials: true
 }));
+
 app.use(express.json());
 
-// ── DATABASE ──────────────────────────────────────────────────
+// ២. ការភ្ជាប់ទៅកាន់ Database Pool (បានបន្ថែម SSL សម្រាប់ Aiven Cloud)
 const db = mysql.createPool({
-    host:             process.env.DB_HOST,
-    user:             process.env.DB_USER,
-    password:         process.env.DB_PASSWORD,
-    database:         process.env.DB_NAME,
-    port:             process.env.DB_PORT || 3306,
+    host: process.env.DB_HOST,          
+    user: process.env.DB_USER,          
+    password: process.env.DB_PASSWORD,  
+    database: process.env.DB_NAME,      
+    port: process.env.DB_PORT || 3306,
     waitForConnections: true,
-    connectionLimit:  10,
-    queueLimit:       0,
-    ssl: { rejectUnauthorized: false }
+    connectionLimit: 10,
+    queueLimit: 0,
+    // ចំណុចសំខាន់បំផុតសម្រាប់ Aiven Cloud គឺត្រង់នេះ 👇
+    ssl: {
+        rejectUnauthorized: false
+    }
 });
 
-// ── CREATE TABLES ON STARTUP ──────────────────────────────────
+// ៣. ពិនិត្យការភ្ជាប់ខ្សែ និងបង្កើត Table 'products' ដោយស្វ័យប្រវត្តិតែម្តង
 db.getConnection((err, connection) => {
-    if (err) { console.error('DB connection failed:', err.message); return; }
-    console.log('✅ Connected to MySQL.');
-
-    connection.query(`
+    if (err) {
+        console.error('Database connection failed: ' + err.message);
+    } else {
+        console.log('Connected to MySQL Database.');
+        
+        // បើកការបង្កើតតារាង products បើមិនទាន់មាននៅក្នុង Aiven Cloud
+        const createTableQuery = `
         CREATE TABLE IF NOT EXISTS products (
-            id          INT AUTO_INCREMENT PRIMARY KEY,
-            name        VARCHAR(255)  NOT NULL,
-            price       DECIMAL(10,2) NOT NULL,
-            category    VARCHAR(100)  NOT NULL,
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            price DECIMAL(10, 2) NOT NULL,
+            category VARCHAR(100) NOT NULL,
             description TEXT,
-            image       LONGTEXT,
-            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    `, err => { if (err) console.error('products table error:', err.message); else console.log('✅ products table ready.'); });
+            image LONGTEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );`;
 
-    connection.query(`
-        CREATE TABLE IF NOT EXISTS payment_sessions (
-            session_id    VARCHAR(100)  PRIMARY KEY,
-            amount        DECIMAL(10,2) NOT NULL,
-            customer_name VARCHAR(255),
-            status        VARCHAR(20)   DEFAULT 'pending',
-            created_at    TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
-        )
-    `, err => {
-        if (err) console.error('payment_sessions table error:', err.message);
-        else     console.log('✅ payment_sessions table ready.');
-        connection.release();
-    });
+        connection.query(createTableQuery, (tableErr) => {
+            if (tableErr) {
+                console.error('Error creating table: ', tableErr.message);
+            } else {
+                console.log('Products table checked/created successfully!');
+            }
+            connection.release(); // ផ្តាច់ការទាក់ទងបណ្តោះអាសន្នដើម្បីទុកឱ្យ API ប្រើ
+        });
+    }
 });
 
-// ══════════════════════════════════════════════════════════════
-//  PRODUCTS
-// ══════════════════════════════════════════════════════════════
+// ------------------- API ENDPOINTS -------------------
 
+// ១. GET: ទាញយកផលិតផលទាំងអស់ពី Database
 app.get('/api/products', (req, res) => {
-    db.query('SELECT * FROM products ORDER BY id DESC', (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
+    const sql = 'SELECT * FROM products ORDER BY id DESC';
+    db.query(sql, (err, results) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.json(results);
     });
 });
 
+// ២. POST: បញ្ចូលផលិតផលថ្មីទៅក្នុង Database
 app.post('/api/products', (req, res) => {
     const { name, price, category, description, image } = req.body;
-    if (!name || !price) return res.status(400).json({ error: 'Name and price are required' });
-    db.query(
-        'INSERT INTO products (name, price, category, description, image) VALUES (?, ?, ?, ?, ?)',
-        [name, price, category, description, image],
-        (err, result) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.status(201).json({ message: 'Product added', id: result.insertId,
-                product: { id: result.insertId, name, price, category, description, image } });
-        }
-    );
-});
+    
+    if (!name || !price) {
+        return res.status(400).json({ error: 'Name and price are required' });
+    }
 
-app.delete('/api/products/:id', (req, res) => {
-    db.query('DELETE FROM products WHERE id = ?', [req.params.id], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!result.affectedRows) return res.status(404).json({ message: 'Product not found' });
-        res.json({ message: 'Product deleted' });
+    const sql = 'INSERT INTO products (name, price, category, description, image) VALUES (?, ?, ?, ?, ?)';
+    const values = [name, price, category, description, image];
+
+    db.query(sql, values, (err, result) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+        res.status(201).json({ 
+            message: 'Product added successfully', 
+            id: result.insertId,
+            product: { id: result.insertId, name, price, category, description, image }
+        });
     });
 });
 
-// ══════════════════════════════════════════════════════════════
-//  PAYMENT SESSIONS
-// ══════════════════════════════════════════════════════════════
+// ៣. DELETE: លុបផលិតផលតាម ID
+app.delete('/api/products/:id', (req, res) => {
+    const { id } = req.params;
+    const sql = 'DELETE FROM products WHERE id = ?';
 
-// 1️⃣  Frontend calls this when QR modal opens
-app.post('/api/payments/create', (req, res) => {
-    const { sessionId, amount, customerName } = req.body;
-    if (!sessionId || !amount) return res.status(400).json({ error: 'sessionId and amount required' });
-
-    db.query(
-        `INSERT INTO payment_sessions (session_id, amount, customer_name, status)
-         VALUES (?, ?, ?, 'pending')
-         ON DUPLICATE KEY UPDATE status = 'pending', created_at = CURRENT_TIMESTAMP`,
-        [sessionId, amount, customerName],
-        err => {
-            if (err) return res.status(500).json({ error: err.message });
-            console.log(`[PAY] Session created: ${sessionId} | $${amount} | ${customerName}`);
-            res.json({ success: true, sessionId });
+    db.query(sql, [id], (err, result) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
         }
-    );
+        if (result.affectedRows === 0) {
+            return res.status(404).json({ message: 'Product not found' });
+        }
+        res.json({ message: 'Product deleted successfully' });
+    });
 });
 
-// 2️⃣  Frontend polls this every 3 seconds
-app.get('/api/payments/status/:sessionId', (req, res) => {
-    db.query(
-        'SELECT status FROM payment_sessions WHERE session_id = ?',
-        [req.params.sessionId],
-        (err, rows) => {
-            if (err) return res.status(500).json({ error: err.message });
-            if (!rows.length) return res.json({ status: 'not_found' });
-            res.json({ status: rows[0].status });
-        }
-    );
-});
-
-// 3️⃣  🌟 YOU TAP THIS BUTTON IN TELEGRAM — it's a GET link that opens in Telegram browser
-//       The Telegram alert message will contain a blue button that calls this URL automatically.
-//       No bot commands needed — just tap the button.
-app.get('/api/payments/confirm-link', (req, res) => {
-    const { secret, sessionId } = req.query;
-
-    if (!secret || secret !== process.env.CONFIRM_SECRET) {
-        return res.status(403).send(`
-            <html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#fff1f1">
-                <h1 style="color:red">❌ Unauthorized</h1>
-                <p>Invalid secret key.</p>
-            </body></html>
-        `);
-    }
-
-    if (!sessionId) {
-        return res.status(400).send(`
-            <html><body style="font-family:sans-serif;text-align:center;padding:40px">
-                <h1>❌ Missing session ID</h1>
-            </body></html>
-        `);
-    }
-
-    db.query(
-        `UPDATE payment_sessions SET status = 'paid'
-         WHERE session_id = ? AND status = 'pending'`,
-        [sessionId],
-        (err, result) => {
-            if (err) return res.status(500).send(`
-                <html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#fff1f1">
-                    <h1 style="color:red">❌ Database Error</h1><p>${err.message}</p>
-                </body></html>
-            `);
-
-            if (result.affectedRows === 0) {
-                // Already confirmed before — safe to show success
-                return res.send(`
-                    <html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#f0fff4">
-                        <h1 style="color:orange">⚠️ Already Confirmed</h1>
-                        <p>This payment was already confirmed earlier.</p>
-                        <p style="color:#888;font-size:13px">Session: <b>${sessionId}</b></p>
-                    </body></html>
-                `);
-            }
-
-            console.log(`[PAY] ✅ Confirmed via Telegram button: ${sessionId}`);
-            res.send(`
-                <html>
-                <head><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-                <body style="font-family:sans-serif;text-align:center;padding:50px 20px;background:#f0fff4">
-                    <div style="font-size:60px">✅</div>
-                    <h1 style="color:#16a34a;margin:16px 0 8px">Payment Confirmed!</h1>
-                    <p style="color:#555;font-size:15px">The customer's order is now processing automatically.</p>
-                    <p style="color:#aaa;font-size:12px;margin-top:24px">Session: <b>${sessionId}</b></p>
-                    <p style="color:#aaa;font-size:11px">You can close this window.</p>
-                </body>
-                </html>
-            `);
-        }
-    );
-});
-
-// ══════════════════════════════════════════════════════════════
-//  START
-// ══════════════════════════════════════════════════════════════
+// ៤. ដំណើរការ Server ឱ្យស្តាប់ការហៅចូល
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+});
 
-/*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  📄 YOUR .env FILE — add this one line:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  CONFIRM_SECRET=pspmart2024
 
-  (use any password you like, just keep it consistent
-   between .env and the CONFIRM_SECRET in Cart.jsx)
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  HOW THE FLOW WORKS:
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  1. Customer fills form → clicks "Authorize Payment via KHQR"
-  2. QR modal appears with pulsing "Waiting for payment…" banner
-  3. Customer scans and transfers money
-  4. YOU see money arrive in your bank/ABA app
-  5. YOU open Telegram → see the order alert
-  6. Below the alert is a GREEN button "✅ CONFIRM PAYMENT RECEIVED"
-  7. Tap the button → opens in Telegram browser → shows green success page
-  8. Customer screen AUTOMATICALLY closes QR → shows invoice ✅
-  9. Telegram receives another message with the full invoice details
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-*/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
