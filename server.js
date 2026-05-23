@@ -152,311 +152,232 @@
 
 
 
-
-
-
-
-
-
-
-
-
 require('dotenv').config();
 
 const express = require('express');
-const mysql = require('mysql2');
-const cors = require('cors');
+const mysql   = require('mysql2');
+const cors    = require('cors');
 
 const app = express();
 
-// ១. CORS Configuration
+// ── CORS ──────────────────────────────────────────────────────
 app.use(cors({
     origin: [
         'https://pspmarketonline.netlify.app',
         'http://localhost:5173'
-    ], 
+    ],
     methods: ['GET', 'POST', 'DELETE', 'PUT'],
     credentials: true
 }));
-
 app.use(express.json());
 
-// ២. Database Pool (Aiven Cloud with SSL)
+// ── DATABASE ──────────────────────────────────────────────────
 const db = mysql.createPool({
-    host: process.env.DB_HOST,          
-    user: process.env.DB_USER,          
-    password: process.env.DB_PASSWORD,  
-    database: process.env.DB_NAME,      
-    port: process.env.DB_PORT || 3306,
+    host:             process.env.DB_HOST,
+    user:             process.env.DB_USER,
+    password:         process.env.DB_PASSWORD,
+    database:         process.env.DB_NAME,
+    port:             process.env.DB_PORT || 3306,
     waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0,
-    ssl: {
-        rejectUnauthorized: false
-    }
+    connectionLimit:  10,
+    queueLimit:       0,
+    ssl: { rejectUnauthorized: false }
 });
 
-// ៣. Create tables on startup
+// ── CREATE TABLES ON STARTUP ──────────────────────────────────
 db.getConnection((err, connection) => {
-    if (err) {
-        console.error('Database connection failed: ' + err.message);
-    } else {
-        console.log('Connected to MySQL Database.');
+    if (err) { console.error('DB connection failed:', err.message); return; }
+    console.log('✅ Connected to MySQL.');
 
-        // Products table
-        connection.query(`
-            CREATE TABLE IF NOT EXISTS products (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                name VARCHAR(255) NOT NULL,
-                price DECIMAL(10, 2) NOT NULL,
-                category VARCHAR(100) NOT NULL,
-                description TEXT,
-                image LONGTEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `, (tableErr) => {
-            if (tableErr) {
-                console.error('Error creating products table:', tableErr.message);
-            } else {
-                console.log('Products table checked/created successfully!');
-            }
-        });
+    connection.query(`
+        CREATE TABLE IF NOT EXISTS products (
+            id          INT AUTO_INCREMENT PRIMARY KEY,
+            name        VARCHAR(255)  NOT NULL,
+            price       DECIMAL(10,2) NOT NULL,
+            category    VARCHAR(100)  NOT NULL,
+            description TEXT,
+            image       LONGTEXT,
+            created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `, err => { if (err) console.error('products table error:', err.message); else console.log('✅ products table ready.'); });
 
-        // 🌟 Payment sessions table for auto-confirmation
-        connection.query(`
-            CREATE TABLE IF NOT EXISTS payment_sessions (
-                session_id VARCHAR(100) PRIMARY KEY,
-                amount DECIMAL(10, 2) NOT NULL,
-                customer_name VARCHAR(255),
-                status VARCHAR(20) DEFAULT 'pending',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        `, (tableErr) => {
-            if (tableErr) {
-                console.error('Error creating payment_sessions table:', tableErr.message);
-            } else {
-                console.log('Payment sessions table checked/created successfully!');
-            }
-            connection.release();
-        });
-    }
-});
-
-
-// ==========================================
-//         PRODUCTS API ENDPOINTS
-// ==========================================
-
-// GET: Fetch all products
-app.get('/api/products', (req, res) => {
-    const sql = 'SELECT * FROM products ORDER BY id DESC';
-    db.query(sql, (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(results);
+    connection.query(`
+        CREATE TABLE IF NOT EXISTS payment_sessions (
+            session_id    VARCHAR(100)  PRIMARY KEY,
+            amount        DECIMAL(10,2) NOT NULL,
+            customer_name VARCHAR(255),
+            status        VARCHAR(20)   DEFAULT 'pending',
+            created_at    TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
+        )
+    `, err => {
+        if (err) console.error('payment_sessions table error:', err.message);
+        else     console.log('✅ payment_sessions table ready.');
+        connection.release();
     });
 });
 
-// POST: Add new product
+// ══════════════════════════════════════════════════════════════
+//  PRODUCTS
+// ══════════════════════════════════════════════════════════════
+
+app.get('/api/products', (req, res) => {
+    db.query('SELECT * FROM products ORDER BY id DESC', (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows);
+    });
+});
+
 app.post('/api/products', (req, res) => {
     const { name, price, category, description, image } = req.body;
-    if (!name || !price) {
-        return res.status(400).json({ error: 'Name and price are required' });
-    }
-    const sql = 'INSERT INTO products (name, price, category, description, image) VALUES (?, ?, ?, ?, ?)';
-    db.query(sql, [name, price, category, description, image], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.status(201).json({ 
-            message: 'Product added successfully', 
-            id: result.insertId,
-            product: { id: result.insertId, name, price, category, description, image }
-        });
-    });
-});
-
-// DELETE: Remove product by ID
-app.delete('/api/products/:id', (req, res) => {
-    const { id } = req.params;
-    db.query('DELETE FROM products WHERE id = ?', [id], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (result.affectedRows === 0) return res.status(404).json({ message: 'Product not found' });
-        res.json({ message: 'Product deleted successfully' });
-    });
-});
-
-
-// ==========================================
-//     🌟 PAYMENT SESSION API ENDPOINTS
-// ==========================================
-
-// POST: Frontend creates a new pending payment session when QR modal opens
-app.post('/api/payments/create', (req, res) => {
-    const { sessionId, amount, customerName } = req.body;
-
-    if (!sessionId || !amount) {
-        return res.status(400).json({ error: 'sessionId and amount are required' });
-    }
-
-    const sql = `
-        INSERT INTO payment_sessions (session_id, amount, customer_name, status) 
-        VALUES (?, ?, ?, 'pending')
-        ON DUPLICATE KEY UPDATE status = 'pending', created_at = CURRENT_TIMESTAMP
-    `;
-
-    db.query(sql, [sessionId, amount, customerName], (err) => {
-        if (err) return res.status(500).json({ error: err.message });
-        console.log(`[PAYMENT] Session created: ${sessionId} | Amount: $${amount} | Customer: ${customerName}`);
-        res.json({ success: true, sessionId });
-    });
-});
-
-// GET: Frontend polls this every 3 seconds to check payment status
-app.get('/api/payments/status/:sessionId', (req, res) => {
-    const { sessionId } = req.params;
-
-    db.query('SELECT status FROM payment_sessions WHERE session_id = ?', [sessionId], (err, results) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (!results.length) return res.json({ status: 'not_found' });
-        res.json({ status: results[0].status });
-    });
-});
-
-// POST: 🤖 Telegram bot calls this when bank payment arrives
-// Body: { secret: "your_secret_key", sessionId: "pay_xxx" }
-// 
-// How to call from your Telegram bot:
-//   await fetch('https://your-backend.railway.app/api/payments/confirm', {
-//     method: 'POST',
-//     headers: { 'Content-Type': 'application/json' },
-//     body: JSON.stringify({ secret: process.env.CONFIRM_SECRET, sessionId: 'pay_xxx' })
-//   });
-app.post('/api/payments/confirm', (req, res) => {
-    const { secret, sessionId } = req.body;
-
-    // 🔒 Protect with secret key — set CONFIRM_SECRET in your .env file
-    if (!secret || secret !== process.env.CONFIRM_SECRET) {
-        console.warn(`[PAYMENT] Unauthorized confirm attempt for session: ${sessionId}`);
-        return res.status(403).json({ error: 'Unauthorized' });
-    }
-
-    if (!sessionId) {
-        return res.status(400).json({ error: 'sessionId is required' });
-    }
-
-    const sql = `
-        UPDATE payment_sessions 
-        SET status = 'paid' 
-        WHERE session_id = ? AND status = 'pending'
-    `;
-
-    db.query(sql, [sessionId], (err, result) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (result.affectedRows === 0) {
-            return res.status(404).json({ error: 'Session not found or already confirmed' });
-        }
-        console.log(`[PAYMENT] ✅ Confirmed: ${sessionId}`);
-        res.json({ success: true, message: `Payment confirmed for session ${sessionId}` });
-    });
-});
-
-// (Optional) GET: List all pending sessions — useful for admin dashboard
-app.get('/api/payments/pending', (req, res) => {
-    const secret = req.headers['x-admin-secret'];
-    if (!secret || secret !== process.env.CONFIRM_SECRET) {
-        return res.status(403).json({ error: 'Unauthorized' });
-    }
-
+    if (!name || !price) return res.status(400).json({ error: 'Name and price are required' });
     db.query(
-        `SELECT * FROM payment_sessions WHERE status = 'pending' ORDER BY created_at DESC`,
-        (err, results) => {
+        'INSERT INTO products (name, price, category, description, image) VALUES (?, ?, ?, ?, ?)',
+        [name, price, category, description, image],
+        (err, result) => {
             if (err) return res.status(500).json({ error: err.message });
-            res.json(results);
+            res.status(201).json({ message: 'Product added', id: result.insertId,
+                product: { id: result.insertId, name, price, category, description, image } });
         }
     );
 });
 
-
-// ==========================================
-//              START SERVER
-// ==========================================
-
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
+app.delete('/api/products/:id', (req, res) => {
+    db.query('DELETE FROM products WHERE id = ?', [req.params.id], (err, result) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!result.affectedRows) return res.status(404).json({ message: 'Product not found' });
+        res.json({ message: 'Product deleted' });
+    });
 });
 
-// GET: Tap-to-confirm link from Telegram (no bot needed)
+// ══════════════════════════════════════════════════════════════
+//  PAYMENT SESSIONS
+// ══════════════════════════════════════════════════════════════
+
+// 1️⃣  Frontend calls this when QR modal opens
+app.post('/api/payments/create', (req, res) => {
+    const { sessionId, amount, customerName } = req.body;
+    if (!sessionId || !amount) return res.status(400).json({ error: 'sessionId and amount required' });
+
+    db.query(
+        `INSERT INTO payment_sessions (session_id, amount, customer_name, status)
+         VALUES (?, ?, ?, 'pending')
+         ON DUPLICATE KEY UPDATE status = 'pending', created_at = CURRENT_TIMESTAMP`,
+        [sessionId, amount, customerName],
+        err => {
+            if (err) return res.status(500).json({ error: err.message });
+            console.log(`[PAY] Session created: ${sessionId} | $${amount} | ${customerName}`);
+            res.json({ success: true, sessionId });
+        }
+    );
+});
+
+// 2️⃣  Frontend polls this every 3 seconds
+app.get('/api/payments/status/:sessionId', (req, res) => {
+    db.query(
+        'SELECT status FROM payment_sessions WHERE session_id = ?',
+        [req.params.sessionId],
+        (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            if (!rows.length) return res.json({ status: 'not_found' });
+            res.json({ status: rows[0].status });
+        }
+    );
+});
+
+// 3️⃣  🌟 YOU TAP THIS BUTTON IN TELEGRAM — it's a GET link that opens in Telegram browser
+//       The Telegram alert message will contain a blue button that calls this URL automatically.
+//       No bot commands needed — just tap the button.
 app.get('/api/payments/confirm-link', (req, res) => {
     const { secret, sessionId } = req.query;
 
     if (!secret || secret !== process.env.CONFIRM_SECRET) {
-        return res.status(403).send('❌ Unauthorized');
+        return res.status(403).send(`
+            <html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#fff1f1">
+                <h1 style="color:red">❌ Unauthorized</h1>
+                <p>Invalid secret key.</p>
+            </body></html>
+        `);
     }
 
     if (!sessionId) {
-        return res.status(400).send('❌ Missing sessionId');
-    }
-
-    const sql = `UPDATE payment_sessions SET status = 'paid' 
-                 WHERE session_id = ? AND status = 'pending'`;
-
-    db.query(sql, [sessionId], (err, result) => {
-        if (err) return res.status(500).send('❌ Database error');
-        if (result.affectedRows === 0) {
-            return res.send('⚠️ Already confirmed or session not found');
-        }
-        console.log(`[PAYMENT] ✅ Confirmed via link: ${sessionId}`);
-        // Simple success page that shows in Telegram browser
-        res.send(`
+        return res.status(400).send(`
             <html><body style="font-family:sans-serif;text-align:center;padding:40px">
-                <h1>✅ Payment Confirmed!</h1>
-                <p>Session: <b>${sessionId}</b></p>
-                <p style="color:green;font-size:20px">Customer order is now processing.</p>
+                <h1>❌ Missing session ID</h1>
             </body></html>
         `);
-    });
+    }
+
+    db.query(
+        `UPDATE payment_sessions SET status = 'paid'
+         WHERE session_id = ? AND status = 'pending'`,
+        [sessionId],
+        (err, result) => {
+            if (err) return res.status(500).send(`
+                <html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#fff1f1">
+                    <h1 style="color:red">❌ Database Error</h1><p>${err.message}</p>
+                </body></html>
+            `);
+
+            if (result.affectedRows === 0) {
+                // Already confirmed before — safe to show success
+                return res.send(`
+                    <html><body style="font-family:sans-serif;text-align:center;padding:40px;background:#f0fff4">
+                        <h1 style="color:orange">⚠️ Already Confirmed</h1>
+                        <p>This payment was already confirmed earlier.</p>
+                        <p style="color:#888;font-size:13px">Session: <b>${sessionId}</b></p>
+                    </body></html>
+                `);
+            }
+
+            console.log(`[PAY] ✅ Confirmed via Telegram button: ${sessionId}`);
+            res.send(`
+                <html>
+                <head><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+                <body style="font-family:sans-serif;text-align:center;padding:50px 20px;background:#f0fff4">
+                    <div style="font-size:60px">✅</div>
+                    <h1 style="color:#16a34a;margin:16px 0 8px">Payment Confirmed!</h1>
+                    <p style="color:#555;font-size:15px">The customer's order is now processing automatically.</p>
+                    <p style="color:#aaa;font-size:12px;margin-top:24px">Session: <b>${sessionId}</b></p>
+                    <p style="color:#aaa;font-size:11px">You can close this window.</p>
+                </body>
+                </html>
+            `);
+        }
+    );
 });
 
+// ══════════════════════════════════════════════════════════════
+//  START
+// ══════════════════════════════════════════════════════════════
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+
 /*
-==============================================
-  🤖 TELEGRAM BOT INTEGRATION GUIDE
-==============================================
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  📄 YOUR .env FILE — add this one line:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-When your Telegram bot receives a bank payment notification,
-have it call /api/payments/confirm like this:
+  CONFIRM_SECRET=pspmart2024
 
-  // Bot listens for admin command: /confirm pay_1234567_5678
-  bot.onText(/\/confirm (.+)/, async (msg, match) => {
-    const sessionId = match[1].trim();
-    
-    const res = await fetch('https://your-backend.railway.app/api/payments/confirm', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        secret: process.env.CONFIRM_SECRET,
-        sessionId: sessionId
-      })
-    });
-    
-    const data = await res.json();
-    if (data.success) {
-      bot.sendMessage(msg.chat.id, `✅ Payment confirmed! Session: ${sessionId}`);
-    } else {
-      bot.sendMessage(msg.chat.id, `❌ Error: ${data.error}`);
-    }
-  });
+  (use any password you like, just keep it consistent
+   between .env and the CONFIRM_SECRET in Cart.jsx)
 
-  The Session ID is shown in the QR modal and also included
-  in the Telegram order alert message automatically.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  HOW THE FLOW WORKS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-==============================================
-  📄 .env FILE — Add this line:
-==============================================
+  1. Customer fills form → clicks "Authorize Payment via KHQR"
+  2. QR modal appears with pulsing "Waiting for payment…" banner
+  3. Customer scans and transfers money
+  4. YOU see money arrive in your bank/ABA app
+  5. YOU open Telegram → see the order alert
+  6. Below the alert is a GREEN button "✅ CONFIRM PAYMENT RECEIVED"
+  7. Tap the button → opens in Telegram browser → shows green success page
+  8. Customer screen AUTOMATICALLY closes QR → shows invoice ✅
+  9. Telegram receives another message with the full invoice details
 
-  CONFIRM_SECRET=your_super_secret_key_here
-
-==============================================
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 */
-
 
 
 
