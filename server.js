@@ -413,6 +413,72 @@ const db = mysql.createPool({
 
 // ៣. Auto-create + auto-migrate tables on startup
 db.getConnection((err, connection) => {
+
+    // Add this table creation (inside db.getConnection)
+    const createOrders = `
+        CREATE TABLE IF NOT EXISTS orders (
+            id VARCHAR(64) PRIMARY KEY,
+            user_id VARCHAR(64),
+            user_email VARCHAR(255),
+            user_name VARCHAR(255),
+            items LONGTEXT,
+            total DECIMAL(12,2),
+            shipping_fee DECIMAL(10,2),
+            carrier VARCHAR(100),
+            address TEXT,
+            phone VARCHAR(50),
+            status VARCHAR(50) DEFAULT 'Pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )`;
+
+    connection.query(createOrders, (err) => {
+        if (err) console.error('Error creating orders table:', err.message);
+        else console.log('✓ orders table ready.');
+    });
+
+    // Add these routes (at the bottom of server.js)
+    app.post('/api/orders', (req, res) => {
+        const { userId, userEmail, userName, items, total, shippingFee, carrier, address, phone } = req.body;
+
+        const orderId = 'ORD-' + Date.now().toString(36);
+        const sql = `
+            INSERT INTO orders 
+            (id, user_id, user_email, user_name, items, total, shipping_fee, carrier, address, phone)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+
+        db.query(sql, [
+            orderId,
+            userId || userEmail,
+            userEmail,
+            userName,
+            JSON.stringify(items),
+            Number(total),
+            Number(shippingFee || 0),
+            carrier,
+            address,
+            phone
+        ], (err) => {
+            if (err) return res.status(500).json({ error: err.message });
+            res.status(201).json({ message: 'Order saved successfully', orderId });
+        });
+    });
+
+    app.get('/api/orders', (req, res) => {
+        db.query('SELECT * FROM orders ORDER BY created_at DESC', (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            
+            const orders = rows.map(row => ({
+                ...row,
+                items: safeJson(row.items) || []
+            }));
+            res.json(orders);
+        });
+    });
+
+
+
+
     if (err) {
         console.error('Database connection failed:', err.message);
         return;
