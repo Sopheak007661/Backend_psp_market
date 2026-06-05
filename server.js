@@ -726,10 +726,40 @@ app.post('/api/users/register', (req, res) => {
     });
 });
 
+// // POST /api/users/login
+// app.post('/api/users/login', (req, res) => {
+//     const { email, passwordHash } = req.body;
+
+//     if (!email || !passwordHash) {
+//         return res.status(400).json({ error: 'email and passwordHash are required.' });
+//     }
+
+//     db.query('SELECT * FROM users WHERE email = ?', [email.toLowerCase().trim()], (err, rows) => {
+//         if (err) return res.status(500).json({ error: err.message });
+//         if (!rows.length) return res.status(404).json({ error: 'No account found for this email.' });
+
+//         const u = rows[0];
+//         if (u.password_hash !== passwordHash) {
+//             return res.status(401).json({ error: 'Incorrect password.' });
+//         }
+
+//         res.json({
+//             user: {
+//                 id:     u.id,
+//                 name:   u.name,
+//                 email:  u.email,
+//                 role:   u.role,
+//                 status: u.status,
+//                 avatar: u.avatar || null,
+//                 date:   u.created_at ? u.created_at.toISOString().slice(0, 10) : null,
+//             },
+//         });
+//     });
+// });
+
 // POST /api/users/login
 app.post('/api/users/login', (req, res) => {
     const { email, passwordHash } = req.body;
-
     if (!email || !passwordHash) {
         return res.status(400).json({ error: 'email and passwordHash are required.' });
     }
@@ -745,16 +775,30 @@ app.post('/api/users/login', (req, res) => {
 
         res.json({
             user: {
-                id:     u.id,
-                name:   u.name,
-                email:  u.email,
-                role:   u.role,
+                id: u.id,
+                name: u.name,
+                email: u.email,
+                role: u.role,
                 status: u.status,
-                avatar: u.avatar || null,
-                date:   u.created_at ? u.created_at.toISOString().slice(0, 10) : null,
+                avatar: u.avatar || null,     // ← This must be here
+                date: u.created_at ? u.created_at.toISOString().slice(0, 10) : null,
             },
         });
     });
+});
+
+// In your register route, inside the success response:
+res.status(201).json({
+    message: 'Registered successfully.',
+    user: {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        status: u.status,
+        avatar: u.avatar || null,          // ← Add this too
+        date: u.created_at ? u.created_at.toISOString().slice(0, 10) : null,
+    },
 });
 
 // POST /api/users/check-email  — lightweight: does this email exist?
