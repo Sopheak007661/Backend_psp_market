@@ -1,143 +1,3 @@
-// require('dotenv').config();
-
-// const express = require('express');
-// const mysql = require('mysql2');
-// const cors = require('cors');
-
-// const app = express();
-
-// // ១. ការកំណត់ CORS ឱ្យដើរជាមួយ Frontend (Netlify)
-// // អ្នកអាចប្ដូរ '*' ទៅជា URL របស់ Netlify របស់អ្នកនៅពេលក្រោយដើម្បីសុវត្ថិភាពខ្ពស់ (ឧទាហរណ៍៖ 'https://your-app.netlify.app')
-// app.use(cors({
-//     origin: [
-//         'https://pspmartonline.netlify.app', // លុបសញ្ញា / នៅខាងចុងចេញ
-//         'http://localhost:5173'                // បន្ថែមនេះដើម្បីឱ្យអ្នកអាចតេស្តនៅលើម៉ាស៊ីនខ្លួនឯងបានដោយមិនលោត Error
-//     ], 
-//     methods: ['GET', 'POST', 'DELETE', 'PUT'],
-//     credentials: true
-// }));
-
-// app.use(express.json());
-
-// // ២. ការភ្ជាប់ទៅកាន់ Database Pool (បានបន្ថែម SSL សម្រាប់ Aiven Cloud)
-// const db = mysql.createPool({
-//     host: process.env.DB_HOST,          
-//     user: process.env.DB_USER,          
-//     password: process.env.DB_PASSWORD,  
-//     database: process.env.DB_NAME,      
-//     port: process.env.DB_PORT || 3306,
-//     waitForConnections: true,
-//     connectionLimit: 10,
-//     queueLimit: 0,
-//     // ចំណុចសំខាន់បំផុតសម្រាប់ Aiven Cloud គឺត្រង់នេះ 👇
-//     ssl: {
-//         rejectUnauthorized: false
-//     }
-// });
-
-// // ៣. ពិនិត្យការភ្ជាប់ខ្សែ និងបង្កើត Table 'products' ដោយស្វ័យប្រវត្តិតែម្តង
-// db.getConnection((err, connection) => {
-//     if (err) {
-//         console.error('Database connection failed: ' + err.message);
-//     } else {
-//         console.log('Connected to MySQL Database.');
-        
-//         // បើកការបង្កើតតារាង products បើមិនទាន់មាននៅក្នុង Aiven Cloud
-//         const createTableQuery = `
-//         CREATE TABLE IF NOT EXISTS products (
-//             id INT AUTO_INCREMENT PRIMARY KEY,
-//             name VARCHAR(255) NOT NULL,
-//             price DECIMAL(10, 2) NOT NULL,
-//             category VARCHAR(100) NOT NULL,
-//             description TEXT,
-//             image LONGTEXT,
-//             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-//         );`;
-
-//         connection.query(createTableQuery, (tableErr) => {
-//             if (tableErr) {
-//                 console.error('Error creating table: ', tableErr.message);
-//             } else {
-//                 console.log('Products table checked/created successfully!');
-//             }
-//             connection.release(); // ផ្តាច់ការទាក់ទងបណ្តោះអាសន្នដើម្បីទុកឱ្យ API ប្រើ
-//         });
-//     }
-// });
-
-// // ------------------- API ENDPOINTS -------------------
-
-// // ១. GET: ទាញយកផលិតផលទាំងអស់ពី Database
-// app.get('/api/products', (req, res) => {
-//     const sql = 'SELECT * FROM products ORDER BY id DESC';
-//     db.query(sql, (err, results) => {
-//         if (err) {
-//             return res.status(500).json({ error: err.message });
-//         }
-//         res.json(results);
-//     });
-// });
-
-// // ២. POST: បញ្ចូលផលិតផលថ្មីទៅក្នុង Database
-// app.post('/api/products', (req, res) => {
-//     const { name, price, category, description, image } = req.body;
-    
-//     if (!name || !price) {
-//         return res.status(400).json({ error: 'Name and price are required' });
-//     }
-
-//     const sql = 'INSERT INTO products (name, price, category, description, image) VALUES (?, ?, ?, ?, ?)';
-//     const values = [name, price, category, description, image];
-
-//     db.query(sql, values, (err, result) => {
-//         if (err) {
-//             return res.status(500).json({ error: err.message });
-//         }
-//         res.status(201).json({ 
-//             message: 'Product added successfully', 
-//             id: result.insertId,
-//             product: { id: result.insertId, name, price, category, description, image }
-//         });
-//     });
-// });
-
-// // ៣. DELETE: លុបផលិតផលតាម ID
-// app.delete('/api/products/:id', (req, res) => {
-//     const { id } = req.params;
-//     const sql = 'DELETE FROM products WHERE id = ?';
-
-//     db.query(sql, [id], (err, result) => {
-//         if (err) {
-//             return res.status(500).json({ error: err.message });
-//         }
-//         if (result.affectedRows === 0) {
-//             return res.status(404).json({ message: 'Product not found' });
-//         }
-//         res.json({ message: 'Product deleted successfully' });
-//     });
-// });
-
-// // ៤. ដំណើរការ Server ឱ្យស្តាប់ការហៅចូល
-// const PORT = process.env.PORT || 5000;
-// app.listen(PORT, () => {
-//     console.log(`Server running on port ${PORT}`);
-// });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 // require('dotenv').config();
@@ -174,7 +34,7 @@
 //     ssl: { rejectUnauthorized: false }
 // });
 
-// // ៣. Auto-create tables on startup
+// // ៣. Auto-create + auto-migrate tables on startup
 // db.getConnection((err, connection) => {
 //     if (err) {
 //         console.error('Database connection failed:', err.message);
@@ -182,50 +42,65 @@
 //     }
 //     console.log('✓ Connected to MySQL Database.');
 
-//     // ── products table (full schema) ──────────────────────────────────────
-//     // JSON columns store arrays/objects; LONGTEXT used for broad MySQL compat
+//     // ── Step 1: Create tables if they don't exist yet ─────────────────────
 //     const createProducts = `
 //     CREATE TABLE IF NOT EXISTS products (
-//         id            VARCHAR(64)   PRIMARY KEY,          -- client-generated uid
-//         category      VARCHAR(100)  NOT NULL DEFAULT 'Other',
+//         id          VARCHAR(64)   PRIMARY KEY,
+//         category    VARCHAR(100)  NOT NULL DEFAULT 'Other',
+//         name        VARCHAR(255)  NOT NULL,
+//         price       DECIMAL(12,2) NOT NULL DEFAULT 0,
+//         description TEXT,
+//         image       LONGTEXT,
+//         created_at  TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
+//     )`;
 
-//         -- parent / base model fields
-//         name          VARCHAR(255)  NOT NULL,
-//         price         DECIMAL(12,2) NOT NULL DEFAULT 0,
-//         stock         INT           DEFAULT NULL,         -- NULL = unlimited
-//         description   TEXT,
-//         image         LONGTEXT,                           -- cover image (base64 or URL)
-//         images        LONGTEXT,                           -- JSON array of image strings
-
-//         -- variant options on the parent  e.g. [{label:"Color", options:["Red","Blue"]}]
-//         variants      LONGTEXT,                           -- JSON array
-
-//         -- per-combo pricing on the parent  e.g. {"Color:Red|Storage:128GB":{price:9.99,stock:5}}
-//         variant_pricing LONGTEXT,                         -- JSON object
-
-//         -- child / sub-models  e.g. [{name,price,stock,description,images,variants,variantPricing}]
-//         child_models  LONGTEXT,                           -- JSON array
-
-//         created_at    TIMESTAMP     DEFAULT CURRENT_TIMESTAMP,
-//         updated_at    TIMESTAMP     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-//     );`;
-
-//     // ── khqr table ────────────────────────────────────────────────────────
 //     const createKhqr = `
 //     CREATE TABLE IF NOT EXISTS khqr (
 //         id         INT PRIMARY KEY DEFAULT 1,
 //         image      LONGTEXT,
 //         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-//     );`;
+//     )`;
 
+//     // ── Step 2: Migration list — adds new columns to existing tables ──────
+//     // errno 1060 = "Duplicate column name" → column already exists → safe to ignore
+//     const migrations = [
+//         // products — new columns
+//         `ALTER TABLE products ADD COLUMN stock            INT       DEFAULT NULL`,
+//         `ALTER TABLE products ADD COLUMN images           LONGTEXT`,
+//         `ALTER TABLE products ADD COLUMN variants         LONGTEXT`,
+//         `ALTER TABLE products ADD COLUMN variant_pricing  LONGTEXT`,
+//         `ALTER TABLE products ADD COLUMN child_models     LONGTEXT`,
+//         `ALTER TABLE products ADD COLUMN updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`,
+//         // products — fix id column type if it was INT before
+//         `ALTER TABLE products MODIFY COLUMN id VARCHAR(64) NOT NULL`,
+//         // products — fix price precision
+//         `ALTER TABLE products MODIFY COLUMN price DECIMAL(12,2) NOT NULL DEFAULT 0`,
+//     ];
+
+//     // Run CREATE tables first, then migrations
 //     connection.query(createProducts, (e1) => {
-//         if (e1) console.error('Error creating products table:', e1.message);
-//         else    console.log('✓ products table ready.');
+//         if (e1) { console.error('Error creating products table:', e1.message); }
+//         else    { console.log('✓ products table ready.'); }
 
 //         connection.query(createKhqr, (e2) => {
-//             if (e2) console.error('Error creating khqr table:', e2.message);
-//             else    console.log('✓ khqr table ready.');
-//             connection.release();
+//             if (e2) { console.error('Error creating khqr table:', e2.message); }
+//             else    { console.log('✓ khqr table ready.'); }
+
+//             // Run each migration; ignore "duplicate column" errors
+//             let completed = 0;
+//             migrations.forEach((sql) => {
+//                 connection.query(sql, (me) => {
+//                     if (me && me.errno !== 1060 && me.errno !== 1091) {
+//                         // 1060 = duplicate column, 1091 = cant drop non-existing — both are fine
+//                         console.warn('Migration warning:', me.message);
+//                     }
+//                     completed++;
+//                     if (completed === migrations.length) {
+//                         console.log('✓ All migrations applied.');
+//                         connection.release();
+//                     }
+//                 });
+//             });
 //         });
 //     });
 // });
@@ -481,6 +356,8 @@
 // // ─────────────────────────────────────────────────────────────────────────────
 // const PORT = process.env.PORT || 5000;
 // app.listen(PORT, () => console.log(`✓ Server running on port ${PORT}`));
+
+
 
 
 
