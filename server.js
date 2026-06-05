@@ -756,8 +756,7 @@ app.post('/api/users/register', (req, res) => {
 //         });
 //     });
 // });
-
-// POST /api/users/login
+// POST /api/users/login  ←←← UPDATE THIS
 app.post('/api/users/login', (req, res) => {
     const { email, passwordHash } = req.body;
     if (!email || !passwordHash) {
@@ -780,25 +779,51 @@ app.post('/api/users/login', (req, res) => {
                 email: u.email,
                 role: u.role,
                 status: u.status,
-                avatar: u.avatar || null,     // ← This must be here
+                avatar: u.avatar || null,        // ← Important
                 date: u.created_at ? u.created_at.toISOString().slice(0, 10) : null,
             },
         });
     });
 });
 
-// In your register route, inside the success response:
-res.status(201).json({
-    message: 'Registered successfully.',
-    user: {
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        status: u.status,
-        avatar: u.avatar || null,          // ← Add this too
-        date: u.created_at ? u.created_at.toISOString().slice(0, 10) : null,
-    },
+// POST /api/users/register  ←←← UPDATE THIS PART
+app.post('/api/users/register', (req, res) => {
+    const { id, name, email, passwordHash, role, status } = req.body;
+    if (!name || !email || !passwordHash) {
+        return res.status(400).json({ error: 'name, email, and passwordHash are required.' });
+    }
+
+    const userId = id || ('USR-' + Date.now());
+    const sql = `INSERT INTO users (id, name, email, password_hash, role, status, avatar) VALUES (?, ?, ?, ?, ?, ?, NULL)`;
+
+    db.query(sql, [
+        userId, name.trim(), email.toLowerCase().trim(), passwordHash,
+        role || 'Customer', status || 'Active'
+    ], (err) => {
+        if (err) {
+            if (err.code === 'ER_DUP_ENTRY') {
+                return res.status(409).json({ error: 'This email is already registered.' });
+            }
+            return res.status(500).json({ error: err.message });
+        }
+
+        db.query('SELECT * FROM users WHERE id = ?', [userId], (e2, rows) => {
+            if (e2) return res.status(500).json({ error: e2.message });
+            const u = rows[0];
+            res.status(201).json({
+                message: 'Registered successfully.',
+                user: {
+                    id: u.id,
+                    name: u.name,
+                    email: u.email,
+                    role: u.role,
+                    status: u.status,
+                    avatar: u.avatar || null,     // ← Important
+                    date: u.created_at ? u.created_at.toISOString().slice(0, 10) : null,
+                },
+            });
+        });
+    });
 });
 
 // POST /api/users/check-email  — lightweight: does this email exist?
