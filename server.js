@@ -3877,151 +3877,268 @@ app.put('/api/khqr', (req, res) => {
     });
 });
 
+// // ─────────────────────────────────────────────────────────────────────────────
+// // ORDERS API
+// // ─────────────────────────────────────────────────────────────────────────────
+// function hydrateOrder(row) {
+//     if (!row) return null;
+//     return {
+//         id:           row.id,
+//         accountEmail: row.account_email,
+//         customerName: row.customer_name,
+//         phone:        row.phone,
+//         address:      row.address,
+//         mapLocation:  row.map_location,
+//         carrier:      row.carrier,
+//         shippingFee:  Number(row.shipping_fee),
+//         subtotal:     Number(row.subtotal),
+//         total:        Number(row.total),
+//         status:       row.status,
+//         date:         row.date_str,
+//         items:        safeJson(row.items) || [],
+//         created_at:   row.created_at,
+//         updated_at:   row.updated_at,
+//     };
+// }
+
+// // GET /api/orders — all orders (admin) or filtered by email (customer)
+// app.get('/api/orders', (req, res) => {
+//     const { email } = req.query;
+//     let sql    = 'SELECT * FROM orders';
+//     const params = [];
+
+//     if (email) {
+//         sql += ' WHERE account_email = ?';
+//         params.push(email.trim().toLowerCase());
+//     }
+
+//     sql += ' ORDER BY created_at DESC';
+
+//     db.query(sql, params, (err, rows) => {
+//         if (err) return res.status(500).json({ error: err.message });
+//         res.json(rows.map(hydrateOrder));
+//     });
+// });
+
+// // GET /api/orders/:id
+// app.get('/api/orders/:id', (req, res) => {
+//     db.query('SELECT * FROM orders WHERE id = ?', [req.params.id], (err, rows) => {
+//         if (err)          return res.status(500).json({ error: err.message });
+//         if (!rows.length) return res.status(404).json({ message: 'Order not found' });
+//         res.json(hydrateOrder(rows[0]));
+//     });
+// });
+
+// // POST /api/orders — create or update (upsert) an order
+// app.post('/api/orders', (req, res) => {
+//     const {
+//         id, accountEmail, customerName, phone, address, mapLocation,
+//         carrier, shippingFee, subtotal, total, status, date, items
+//     } = req.body;
+
+//     if (!accountEmail || !customerName || !phone || !address || !items) {
+//         return res.status(400).json({ error: 'Required fields missing: accountEmail, customerName, phone, address, and items are required.' });
+//     }
+
+//     const orderId = id ? String(id) : Math.floor(100000 + Math.random() * 900000).toString();
+
+//     const sql = `
+//         INSERT INTO orders
+//             (id, account_email, customer_name, phone, address, map_location,
+//              carrier, shipping_fee, subtotal, total, status, date_str, items)
+//         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+//         ON DUPLICATE KEY UPDATE
+//             customer_name = VALUES(customer_name),
+//             phone         = VALUES(phone),
+//             address       = VALUES(address),
+//             map_location  = VALUES(map_location),
+//             carrier       = VALUES(carrier),
+//             shipping_fee  = VALUES(shipping_fee),
+//             subtotal      = VALUES(subtotal),
+//             total         = VALUES(total),
+//             status        = VALUES(status),
+//             items         = VALUES(items),
+//             updated_at    = CURRENT_TIMESTAMP
+//     `;
+
+//     const values = [
+//         orderId,
+//         accountEmail.trim().toLowerCase(),
+//         customerName.trim(),
+//         phone.trim(),
+//         address.trim(),
+//         mapLocation || null,
+//         carrier     || 'Standard Home Delivery',
+//         Number(shippingFee) || 0.00,
+//         Number(subtotal)    || 0.00,
+//         Number(total)       || 0.00,
+//         status || 'confirmed',
+//         date   || new Date().toLocaleDateString('en-US'),
+//         toJson(items),
+//     ];
+
+//     db.query(sql, values, (err) => {
+//         if (err) return res.status(500).json({ error: err.message });
+//         db.query('SELECT * FROM orders WHERE id = ?', [orderId], (err2, rows) => {
+//             if (err2) return res.status(500).json({ error: err2.message });
+//             res.status(201).json({ message: 'Order saved successfully.', order: hydrateOrder(rows[0]) });
+//         });
+//     });
+// });
+
+// // PATCH /api/orders/:id — update order fields
+// app.patch('/api/orders/:id', (req, res) => {
+//     const { id } = req.params;
+//     const allowed = ['status','customer_name','phone','address','map_location','carrier','shipping_fee','subtotal','total','items'];
+//     const dbMap   = { customerName: 'customer_name', mapLocation: 'map_location', shippingFee: 'shipping_fee' };
+//     const fields  = [];
+//     const values  = [];
+
+//     Object.entries(req.body).forEach(([key, val]) => {
+//         const col = dbMap[key] || key;
+//         if (!allowed.includes(col)) return;
+//         fields.push(`${col} = ?`);
+//         values.push(col === 'items' ? toJson(val) : val);
+//     });
+
+//     if (!fields.length) return res.status(400).json({ error: 'No valid fields to update.' });
+//     values.push(id);
+
+//     db.query(`UPDATE orders SET ${fields.join(', ')} WHERE id = ?`, values, (err, result) => {
+//         if (err)                  return res.status(500).json({ error: err.message });
+//         if (!result.affectedRows) return res.status(404).json({ message: 'Order not found.' });
+//         db.query('SELECT * FROM orders WHERE id = ?', [id], (err2, rows) => {
+//             if (err2) return res.status(500).json({ error: err2.message });
+//             res.json({ message: 'Order updated successfully.', order: hydrateOrder(rows[0]) });
+//         });
+//     });
+// });
+
+// // DELETE /api/orders/:id
+// app.delete('/api/orders/:id', (req, res) => {
+//     db.query('DELETE FROM orders WHERE id = ?', [req.params.id], (err, result) => {
+//         if (err)                  return res.status(500).json({ error: err.message });
+//         if (!result.affectedRows) return res.status(404).json({ message: 'Order not found.' });
+//         res.json({ message: 'Order deleted successfully.' });
+//     });
+// });
+
+
+
+
+
 // ─────────────────────────────────────────────────────────────────────────────
-// ORDERS API
+// ORDERS API (INVOICE HISTORY)
 // ─────────────────────────────────────────────────────────────────────────────
+
+// Helper function to format database order rows back to standard frontend objects
 function hydrateOrder(row) {
     if (!row) return null;
     return {
-        id:           row.id,
+        id: row.id,
         accountEmail: row.account_email,
         customerName: row.customer_name,
-        phone:        row.phone,
-        address:      row.address,
-        mapLocation:  row.map_location,
-        carrier:      row.carrier,
-        shippingFee:  Number(row.shipping_fee),
-        subtotal:     Number(row.subtotal),
-        total:        Number(row.total),
-        status:       row.status,
-        date:         row.date_str,
-        items:        safeJson(row.items) || [],
-        created_at:   row.created_at,
-        updated_at:   row.updated_at,
+        phone: row.phone,
+        address: row.address,
+        mapLocation: row.map_location,
+        carrier: row.carrier,
+        shippingFee: Number(row.shipping_fee),
+        subtotal: Number(row.subtotal),
+        total: Number(row.total),
+        status: row.status,
+        date: row.date_str || row.created_at.toISOString().slice(0, 10),
+        items: safeJson(row.items) || [],
+        createdAt: row.created_at,
+        updatedAt: row.updated_at
     };
 }
 
-// GET /api/orders — all orders (admin) or filtered by email (customer)
+// GET /api/orders - Fetch all orders (Admin views all, or filtered via query parameter)
 app.get('/api/orders', (req, res) => {
     const { email } = req.query;
-    let sql    = 'SELECT * FROM orders';
-    const params = [];
+    
+    let sql = 'SELECT * FROM orders';
+    const values = [];
 
+    // If an email query parameter is passed (e.g., /api/orders?email=user@test.com), filter results
     if (email) {
         sql += ' WHERE account_email = ?';
-        params.push(email.trim().toLowerCase());
+        values.push(email.toLowerCase().trim());
     }
-
+    
     sql += ' ORDER BY created_at DESC';
 
-    db.query(sql, params, (err, rows) => {
+    db.query(sql, values, (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json(rows.map(hydrateOrder));
     });
 });
 
-// GET /api/orders/:id
-app.get('/api/orders/:id', (req, res) => {
-    db.query('SELECT * FROM orders WHERE id = ?', [req.params.id], (err, rows) => {
-        if (err)          return res.status(500).json({ error: err.message });
-        if (!rows.length) return res.status(404).json({ message: 'Order not found' });
-        res.json(hydrateOrder(rows[0]));
-    });
-});
-
-// POST /api/orders — create or update (upsert) an order
+// POST /api/orders - Add a new Invoice (Triggers when customer completes checkout)
 app.post('/api/orders', (req, res) => {
-    const {
-        id, accountEmail, customerName, phone, address, mapLocation,
-        carrier, shippingFee, subtotal, total, status, date, items
+    const { 
+        id, accountEmail, customerName, phone, address, 
+        mapLocation, carrier, shippingFee, subtotal, total, items, date 
     } = req.body;
 
-    if (!accountEmail || !customerName || !phone || !address || !items) {
-        return res.status(400).json({ error: 'Required fields missing: accountEmail, customerName, phone, address, and items are required.' });
+    if (!accountEmail || !customerName || !phone || !items) {
+        return res.status(400).json({ error: 'Missing required order placement details.' });
     }
 
-    const orderId = id ? String(id) : Math.floor(100000 + Math.random() * 900000).toString();
+    const orderId = id || ('INV-' + Date.now().toString(36).toUpperCase());
+    const orderDateStr = date || new Date().toLocaleString('en-US', { timeZone: 'Asia/Phnom_Penh' });
 
     const sql = `
-        INSERT INTO orders
-            (id, account_email, customer_name, phone, address, map_location,
-             carrier, shipping_fee, subtotal, total, status, date_str, items)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE
-            customer_name = VALUES(customer_name),
-            phone         = VALUES(phone),
-            address       = VALUES(address),
-            map_location  = VALUES(map_location),
-            carrier       = VALUES(carrier),
-            shipping_fee  = VALUES(shipping_fee),
-            subtotal      = VALUES(subtotal),
-            total         = VALUES(total),
-            status        = VALUES(status),
-            items         = VALUES(items),
-            updated_at    = CURRENT_TIMESTAMP
+        INSERT INTO orders (
+            id, account_email, customer_name, phone, address, 
+            map_location, carrier, shipping_fee, subtotal, total, 
+            status, date_str, items
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, ?)
     `;
 
     const values = [
         orderId,
-        accountEmail.trim().toLowerCase(),
+        accountEmail.toLowerCase().trim(),
         customerName.trim(),
         phone.trim(),
         address.trim(),
         mapLocation || null,
-        carrier     || 'Standard Home Delivery',
-        Number(shippingFee) || 0.00,
-        Number(subtotal)    || 0.00,
-        Number(total)       || 0.00,
-        status || 'confirmed',
-        date   || new Date().toLocaleDateString('en-US'),
-        toJson(items),
+        carrier,
+        Number(shippingFee) || 0,
+        Number(subtotal) || 0,
+        Number(total) || 0,
+        orderDateStr,
+        toJson(items || [])
     ];
 
     db.query(sql, values, (err) => {
         if (err) return res.status(500).json({ error: err.message });
+        
         db.query('SELECT * FROM orders WHERE id = ?', [orderId], (err2, rows) => {
             if (err2) return res.status(500).json({ error: err2.message });
-            res.status(201).json({ message: 'Order saved successfully.', order: hydrateOrder(rows[0]) });
+            res.status(201).json({ 
+                message: 'Order created and saved successfully.', 
+                order: hydrateOrder(rows[0]) 
+            });
         });
     });
 });
 
-// PATCH /api/orders/:id — update order fields
-app.patch('/api/orders/:id', (req, res) => {
-    const { id } = req.params;
-    const allowed = ['status','customer_name','phone','address','map_location','carrier','shipping_fee','subtotal','total','items'];
-    const dbMap   = { customerName: 'customer_name', mapLocation: 'map_location', shippingFee: 'shipping_fee' };
-    const fields  = [];
-    const values  = [];
-
-    Object.entries(req.body).forEach(([key, val]) => {
-        const col = dbMap[key] || key;
-        if (!allowed.includes(col)) return;
-        fields.push(`${col} = ?`);
-        values.push(col === 'items' ? toJson(val) : val);
-    });
-
-    if (!fields.length) return res.status(400).json({ error: 'No valid fields to update.' });
-    values.push(id);
-
-    db.query(`UPDATE orders SET ${fields.join(', ')} WHERE id = ?`, values, (err, result) => {
-        if (err)                  return res.status(500).json({ error: err.message });
-        if (!result.affectedRows) return res.status(404).json({ message: 'Order not found.' });
-        db.query('SELECT * FROM orders WHERE id = ?', [id], (err2, rows) => {
-            if (err2) return res.status(500).json({ error: err2.message });
-            res.json({ message: 'Order updated successfully.', order: hydrateOrder(rows[0]) });
-        });
-    });
-});
-
-// DELETE /api/orders/:id
+// DELETE /api/orders/:id - Delete item from invoice history (Admin only)
 app.delete('/api/orders/:id', (req, res) => {
-    db.query('DELETE FROM orders WHERE id = ?', [req.params.id], (err, result) => {
-        if (err)                  return res.status(500).json({ error: err.message });
-        if (!result.affectedRows) return res.status(404).json({ message: 'Order not found.' });
-        res.json({ message: 'Order deleted successfully.' });
+    const { id } = req.params;
+    
+    db.query('DELETE FROM orders WHERE id = ?', [id], (err, result) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (!result.affectedRows) return res.status(404).json({ message: 'Order record not found.' });
+        
+        res.json({ message: 'Invoice historical record deleted successfully.' });
     });
 });
+
+
+
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // COMMENTS API
