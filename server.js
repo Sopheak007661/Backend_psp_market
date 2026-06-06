@@ -4031,98 +4031,193 @@ app.put('/api/khqr', (req, res) => {
 // ORDERS API (INVOICE HISTORY)
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Helper function to format database order rows back to standard frontend objects
+// // Helper function to format database order rows back to standard frontend objects
+// function hydrateOrder(row) {
+//     if (!row) return null;
+//     return {
+//         id: row.id,
+//         accountEmail: row.account_email,
+//         customerName: row.customer_name,
+//         phone: row.phone,
+//         address: row.address,
+//         mapLocation: row.map_location,
+//         carrier: row.carrier,
+//         shippingFee: Number(row.shipping_fee),
+//         subtotal: Number(row.subtotal),
+//         total: Number(row.total),
+//         status: row.status,
+//         date: row.date_str || row.created_at.toISOString().slice(0, 10),
+//         items: safeJson(row.items) || [],
+//         createdAt: row.created_at,
+//         updatedAt: row.updated_at
+//     };
+// }
+
+// // GET /api/orders - Fetch all orders (Admin views all, or filtered via query parameter)
+// app.get('/api/orders', (req, res) => {
+//     const { email } = req.query;
+    
+//     let sql = 'SELECT * FROM orders';
+//     const values = [];
+
+//     // If an email query parameter is passed (e.g., /api/orders?email=user@test.com), filter results
+//     if (email) {
+//         sql += ' WHERE account_email = ?';
+//         values.push(email.toLowerCase().trim());
+//     }
+    
+//     sql += ' ORDER BY created_at DESC';
+
+//     db.query(sql, values, (err, rows) => {
+//         if (err) return res.status(500).json({ error: err.message });
+//         res.json(rows.map(hydrateOrder));
+//     });
+// });
+
+// // POST /api/orders - Add a new Invoice (Triggers when customer completes checkout)
+// app.post('/api/orders', (req, res) => {
+//     const { 
+//         id, accountEmail, customerName, phone, address, 
+//         mapLocation, carrier, shippingFee, subtotal, total, items, date 
+//     } = req.body;
+
+//     if (!accountEmail || !customerName || !phone || !items) {
+//         return res.status(400).json({ error: 'Missing required order placement details.' });
+//     }
+
+//     const orderId = id || ('INV-' + Date.now().toString(36).toUpperCase());
+//     const orderDateStr = date || new Date().toLocaleString('en-US', { timeZone: 'Asia/Phnom_Penh' });
+
+//     const sql = `
+//         INSERT INTO orders (
+//             id, account_email, customer_name, phone, address, 
+//             map_location, carrier, shipping_fee, subtotal, total, 
+//             status, date_str, items
+//         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, ?)
+//     `;
+
+//     const values = [
+//         orderId,
+//         accountEmail.toLowerCase().trim(),
+//         customerName.trim(),
+//         phone.trim(),
+//         address.trim(),
+//         mapLocation || null,
+//         carrier,
+//         Number(shippingFee) || 0,
+//         Number(subtotal) || 0,
+//         Number(total) || 0,
+//         orderDateStr,
+//         toJson(items || [])
+//     ];
+
+//     db.query(sql, values, (err) => {
+//         if (err) return res.status(500).json({ error: err.message });
+        
+//         db.query('SELECT * FROM orders WHERE id = ?', [orderId], (err2, rows) => {
+//             if (err2) return res.status(500).json({ error: err2.message });
+//             res.status(201).json({ 
+//                 message: 'Order created and saved successfully.', 
+//                 order: hydrateOrder(rows[0]) 
+//             });
+//         });
+//     });
+// });
+
+
+
+
+
+
+// ... existing server code ...
+
+// Orders API (active & fixed)
 function hydrateOrder(row) {
-    if (!row) return null;
-    return {
-        id: row.id,
-        accountEmail: row.account_email,
-        customerName: row.customer_name,
-        phone: row.phone,
-        address: row.address,
-        mapLocation: row.map_location,
-        carrier: row.carrier,
-        shippingFee: Number(row.shipping_fee),
-        subtotal: Number(row.subtotal),
-        total: Number(row.total),
-        status: row.status,
-        date: row.date_str || row.created_at.toISOString().slice(0, 10),
-        items: safeJson(row.items) || [],
-        createdAt: row.created_at,
-        updatedAt: row.updated_at
-    };
+  if (!row) return null;
+  return {
+    id: row.id,
+    accountEmail: row.account_email,
+    customerName: row.customer_name,
+    phone: row.phone,
+    address: row.address,
+    mapLocation: row.map_location,
+    carrier: row.carrier,
+    shippingFee: Number(row.shipping_fee || 0),
+    subtotal: Number(row.subtotal || 0),
+    total: Number(row.total || 0),
+    status: row.status || 'paid',
+    date: row.date_str || (row.created_at ? row.created_at.toISOString().slice(0, 16).replace('T', ' ') : new Date().toLocaleString()),
+    items: safeJson(row.items) || [],
+    created_at: row.created_at,
+    updated_at: row.updated_at
+  };
 }
 
-// GET /api/orders - Fetch all orders (Admin views all, or filtered via query parameter)
+// GET /api/orders
 app.get('/api/orders', (req, res) => {
-    const { email } = req.query;
-    
-    let sql = 'SELECT * FROM orders';
-    const values = [];
+  const { email } = req.query;
+  let sql = 'SELECT * FROM orders';
+  const values = [];
 
-    // If an email query parameter is passed (e.g., /api/orders?email=user@test.com), filter results
-    if (email) {
-        sql += ' WHERE account_email = ?';
-        values.push(email.toLowerCase().trim());
-    }
-    
-    sql += ' ORDER BY created_at DESC';
+  if (email) {
+    sql += ' WHERE account_email = ?';
+    values.push(email.toLowerCase().trim());
+  }
+  sql += ' ORDER BY created_at DESC';
 
-    db.query(sql, values, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows.map(hydrateOrder));
-    });
+  db.query(sql, values, (err, rows) => {
+    if (err) return res.status(500).json({ error: err.message });
+    res.json(rows.map(hydrateOrder));
+  });
 });
 
-// POST /api/orders - Add a new Invoice (Triggers when customer completes checkout)
+// POST /api/orders
 app.post('/api/orders', (req, res) => {
-    const { 
-        id, accountEmail, customerName, phone, address, 
-        mapLocation, carrier, shippingFee, subtotal, total, items, date 
-    } = req.body;
+  const { id, accountEmail, customerName, phone, address, mapLocation, carrier, shippingFee, subtotal, total, items, date } = req.body;
 
-    if (!accountEmail || !customerName || !phone || !items) {
-        return res.status(400).json({ error: 'Missing required order placement details.' });
-    }
+  if (!accountEmail || !customerName || !phone || !items) {
+    return res.status(400).json({ error: 'Missing required fields' });
+  }
 
-    const orderId = id || ('INV-' + Date.now().toString(36).toUpperCase());
-    const orderDateStr = date || new Date().toLocaleString('en-US', { timeZone: 'Asia/Phnom_Penh' });
+  const orderId = id || `INV-${Date.now().toString(36).toUpperCase()}`;
+  const orderDateStr = date || new Date().toLocaleString('en-US', { timeZone: 'Asia/Phnom_Penh' });
 
-    const sql = `
-        INSERT INTO orders (
-            id, account_email, customer_name, phone, address, 
-            map_location, carrier, shipping_fee, subtotal, total, 
-            status, date_str, items
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, ?)
-    `;
+  const sql = `
+    INSERT INTO orders (id, account_email, customer_name, phone, address, map_location, carrier, 
+                        shipping_fee, subtotal, total, status, date_str, items)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, ?)
+    ON DUPLICATE KEY UPDATE 
+      status = VALUES(status), updated_at = CURRENT_TIMESTAMP
+  `;
 
-    const values = [
-        orderId,
-        accountEmail.toLowerCase().trim(),
-        customerName.trim(),
-        phone.trim(),
-        address.trim(),
-        mapLocation || null,
-        carrier,
-        Number(shippingFee) || 0,
-        Number(subtotal) || 0,
-        Number(total) || 0,
-        orderDateStr,
-        toJson(items || [])
-    ];
+  const values = [
+    orderId,
+    accountEmail.toLowerCase().trim(),
+    customerName.trim(),
+    phone.trim(),
+    address.trim(),
+    mapLocation || null,
+    carrier || 'Standard Home Delivery',
+    Number(shippingFee) || 0,
+    Number(subtotal) || 0,
+    Number(total) || 0,
+    orderDateStr,
+    JSON.stringify(items || [])
+  ];
 
-    db.query(sql, values, (err) => {
-        if (err) return res.status(500).json({ error: err.message });
-        
-        db.query('SELECT * FROM orders WHERE id = ?', [orderId], (err2, rows) => {
-            if (err2) return res.status(500).json({ error: err2.message });
-            res.status(201).json({ 
-                message: 'Order created and saved successfully.', 
-                order: hydrateOrder(rows[0]) 
-            });
-        });
+  db.query(sql, values, (err) => {
+    if (err) return res.status(500).json({ error: err.message });
+    db.query('SELECT * FROM orders WHERE id = ?', [orderId], (err2, rows) => {
+      if (err2) return res.status(500).json({ error: err2.message });
+      res.status(201).json({ message: 'Order saved', order: hydrateOrder(rows[0]) });
     });
+  });
 });
+
+
+
+
+
 
 // DELETE /api/orders/:id - Delete item from invoice history (Admin only)
 app.delete('/api/orders/:id', (req, res) => {
