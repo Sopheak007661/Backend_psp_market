@@ -5025,8 +5025,18 @@ app.get('/api/health', (req, res) => {
     });
 });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// START SERVER
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── KEEP ALIVE (prevents Render free tier sleep) ───────────────────────────
+const https = require('https');
+const RENDER_URL = 'https://backend-psp-market.onrender.com/api/health';
+
+setInterval(() => {
+    https.get(RENDER_URL, (res) => {
+        console.log(`✓ Keep-alive ping: ${res.statusCode}`);
+    }).on('error', (err) => {
+        console.warn('Keep-alive ping failed:', err.message);
+    });
+}, 10 * 60 * 1000); // ping every 10 minutes
+
+// ─── START SERVER ────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`✓ Server running on port ${PORT}`));
