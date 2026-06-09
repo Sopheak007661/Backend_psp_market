@@ -6304,39 +6304,95 @@ app.get('/api/orders', (req, res) => {
     });
 });
 
-app.post('/api/orders', (req, res) => {
-    const { id, accountEmail, customerName, phone, address, mapLocation, carrier, shippingFee, subtotal, total, items, date } = req.body;
+// app.post('/api/orders', (req, res) => {
+//     const { id, accountEmail, customerName, phone, address, mapLocation, carrier, shippingFee, subtotal, total, items, date } = req.body;
 
-    if (!accountEmail || !customerName || !phone || !items) {
-        return res.status(400).json({ error: 'Missing required fields' });
+//     if (!accountEmail || !customerName || !phone || !items) {
+//         return res.status(400).json({ error: 'Missing required fields' });
+//     }
+
+//     const orderId      = id || `INV-${Date.now().toString(36).toUpperCase()}`;
+//     const orderDateStr = date || new Date().toLocaleString('en-US', { timeZone: 'Asia/Phnom_Penh' });
+
+//     const sql = `
+//         INSERT INTO orders (id, account_email, customer_name, phone, address, map_location, carrier,
+//                             shipping_fee, subtotal, total, status, date_str, items)
+//         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, ?)
+//         ON DUPLICATE KEY UPDATE
+//             status = VALUES(status), updated_at = CURRENT_TIMESTAMP
+//     `;
+
+//     const values = [
+//         orderId,
+//         accountEmail.toLowerCase().trim(),
+//         customerName.trim(),
+//         phone.trim(),
+//         address.trim(),
+//         mapLocation || null,
+//         carrier || 'Standard Home Delivery',
+//         Number(shippingFee) || 0,
+//         Number(subtotal)    || 0,
+//         Number(total)       || 0,
+//         orderDateStr,
+//         JSON.stringify(items || []),
+//     ];
+
+
+
+app.post('/api/orders', (req, res) => {
+    const {
+        id, accountEmail, customerName, phone, address,
+        mapLocation, carrier, shippingFee, subtotal, total, items, date, status
+    } = req.body;
+
+    // Safe string helpers — prevent .trim() crash on undefined
+    const safeStr  = (v) => (v != null ? String(v).trim() : '');
+    const safeLow  = (v) => safeStr(v).toLowerCase();
+
+    const cleanEmail = safeLow(accountEmail);
+    const cleanName  = safeStr(customerName);
+    const cleanPhone = safeStr(phone);
+    const cleanAddr  = safeStr(address);
+
+    if (!cleanEmail || !cleanName || !cleanPhone) {
+        return res.status(400).json({ error: 'Missing required fields: accountEmail, customerName, phone' });
+    }
+
+    // Safely serialize items — handle both array and already-stringified JSON
+    let itemsJson;
+    if (typeof items === 'string') {
+        try { JSON.parse(items); itemsJson = items; } catch { itemsJson = '[]'; }
+    } else {
+        itemsJson = JSON.stringify(Array.isArray(items) ? items : []);
     }
 
     const orderId      = id || `INV-${Date.now().toString(36).toUpperCase()}`;
     const orderDateStr = date || new Date().toLocaleString('en-US', { timeZone: 'Asia/Phnom_Penh' });
+    const orderStatus  = status || 'paid';
 
     const sql = `
         INSERT INTO orders (id, account_email, customer_name, phone, address, map_location, carrier,
                             shipping_fee, subtotal, total, status, date_str, items)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'paid', ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON DUPLICATE KEY UPDATE
             status = VALUES(status), updated_at = CURRENT_TIMESTAMP
     `;
 
     const values = [
         orderId,
-        accountEmail.toLowerCase().trim(),
-        customerName.trim(),
-        phone.trim(),
-        address.trim(),
+        cleanEmail,
+        cleanName,
+        cleanPhone,
+        cleanAddr  || 'N/A',
         mapLocation || null,
-        carrier || 'Standard Home Delivery',
+        safeStr(carrier) || 'Standard Home Delivery',
         Number(shippingFee) || 0,
         Number(subtotal)    || 0,
         Number(total)       || 0,
+        orderStatus,
         orderDateStr,
-        JSON.stringify(items || []),
+        itemsJson,
     ];
-
     db.query(sql, values, (err) => {
         if (err) return res.status(500).json({ error: err.message });
         db.query('SELECT * FROM orders WHERE id = ?', [orderId], (err2, rows) => {
