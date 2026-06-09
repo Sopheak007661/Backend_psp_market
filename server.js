@@ -4545,7 +4545,7 @@ function hydrateProduct(row) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GEMINI AI CHAT API
+// // GEMINI AI CHAT API
 // ─────────────────────────────────────────────────────────────────────────────
 const chatSystemInstruction = `
 You are PSP Assistant, the official and exclusive AI customer support agent for PSP MARKET (also known as PSP Mart).
@@ -4741,17 +4741,70 @@ If you are ever unsure about any answer, always fall back to:
    or contact our support team directly. We are always happy to help! 😊"
 `;
 
+// app.post('/api/chat', async (req, res) => {
+//     try {
+//         const { message } = req.body;
+
+//         if (!message || !message.trim()) {
+//             return res.status(400).json({ error: 'message is required.' });
+//         }
+
+//         const response = await ai.models.generateContent({
+//             model: 'gemini-flash-lite-latest',
+//             contents: message,
+//             config: {
+//                 systemInstruction: chatSystemInstruction
+//             }
+//         });
+
+//         res.json({ reply: response.text });
+//     } catch (error) {
+//         console.error('[chat POST /api/chat]', error);
+//         res.status(500).json({ error: 'The server is currently busy. Please wait a moment and try again.' });
+//     }
+// });
+
+
+
+
+
+
+
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GEMINI AI CHAT API
+// ─────────────────────────────────────────────────────────────────────────────
 app.post('/api/chat', async (req, res) => {
     try {
-        const { message } = req.body;
+        const { message, history } = req.body;
 
         if (!message || !message.trim()) {
             return res.status(400).json({ error: 'message is required.' });
         }
 
+        // Build conversation history in Gemini format
+        const contents = [];
+
+        // Add previous messages if any
+        if (Array.isArray(history) && history.length > 0) {
+            history.forEach(({ role, text }) => {
+                contents.push({
+                    role: role === 'bot' ? 'model' : 'user',
+                    parts: [{ text }]
+                });
+            });
+        }
+
+        // Add current user message
+        contents.push({
+            role: 'user',
+            parts: [{ text: message.trim() }]
+        });
+
         const response = await ai.models.generateContent({
-            model: 'gemini-flash-lite-latest',
-            contents: message,
+            model: 'gemini-2.0-flash-lite',
+            contents: contents,
             config: {
                 systemInstruction: chatSystemInstruction
             }
@@ -4763,7 +4816,6 @@ app.post('/api/chat', async (req, res) => {
         res.status(500).json({ error: 'The server is currently busy. Please wait a moment and try again.' });
     }
 });
-
 // ─────────────────────────────────────────────────────────────────────────────
 // PRODUCTS API
 // ─────────────────────────────────────────────────────────────────────────────
