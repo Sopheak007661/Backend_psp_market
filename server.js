@@ -4545,7 +4545,7 @@ function hydrateProduct(row) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// // GEMINI AI CHAT API
+// GEMINI AI CHAT API
 // ─────────────────────────────────────────────────────────────────────────────
 const chatSystemInstruction = `
 You are PSP Assistant, the official and exclusive AI customer support agent for PSP MARKET (also known as PSP Mart).
@@ -4741,70 +4741,17 @@ If you are ever unsure about any answer, always fall back to:
    or contact our support team directly. We are always happy to help! 😊"
 `;
 
-// app.post('/api/chat', async (req, res) => {
-//     try {
-//         const { message } = req.body;
-
-//         if (!message || !message.trim()) {
-//             return res.status(400).json({ error: 'message is required.' });
-//         }
-
-//         const response = await ai.models.generateContent({
-//             model: 'gemini-flash-lite-latest',
-//             contents: message,
-//             config: {
-//                 systemInstruction: chatSystemInstruction
-//             }
-//         });
-
-//         res.json({ reply: response.text });
-//     } catch (error) {
-//         console.error('[chat POST /api/chat]', error);
-//         res.status(500).json({ error: 'The server is currently busy. Please wait a moment and try again.' });
-//     }
-// });
-
-
-
-
-
-
-
-
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GEMINI AI CHAT API
-// ─────────────────────────────────────────────────────────────────────────────
 app.post('/api/chat', async (req, res) => {
     try {
-        const { message, history } = req.body;
+        const { message } = req.body;
 
         if (!message || !message.trim()) {
             return res.status(400).json({ error: 'message is required.' });
         }
 
-        // Build conversation history in Gemini format
-        const contents = [];
-
-        // Add previous messages if any
-        if (Array.isArray(history) && history.length > 0) {
-            history.forEach(({ role, text }) => {
-                contents.push({
-                    role: role === 'bot' ? 'model' : 'user',
-                    parts: [{ text }]
-                });
-            });
-        }
-
-        // Add current user message
-        contents.push({
-            role: 'user',
-            parts: [{ text: message.trim() }]
-        });
-
         const response = await ai.models.generateContent({
-            model: 'gemini-2.0-flash-lite',
-            contents: contents,
+            model: 'gemini-flash-lite-latest',
+            contents: message,
             config: {
                 systemInstruction: chatSystemInstruction
             }
@@ -4816,6 +4763,7 @@ app.post('/api/chat', async (req, res) => {
         res.status(500).json({ error: 'The server is currently busy. Please wait a moment and try again.' });
     }
 });
+
 // ─────────────────────────────────────────────────────────────────────────────
 // PRODUCTS API
 // ─────────────────────────────────────────────────────────────────────────────
@@ -5254,6 +5202,305 @@ app.delete('/api/comments', (req, res) => {
         }
         res.json({ success: true, message: 'All comments deleted.' });
     });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INVOICE IMAGES API
+// Store payment screenshot images per order
+// ─────────────────────────────────────────────────────────────────────────────
+db.getConnection((err, connection) => {
+    if (err) return;
+    const createInvoiceImages = `
+    CREATE TABLE IF NOT EXISTS invoice_images (
+        id           VARCHAR(64)   PRIMARY KEY,
+        order_id     VARCHAR(64)   NOT NULL,
+        account_email VARCHAR(255) NOT NULL,
+        image        LONGTEXT      NOT NULL,
+        uploaded_at  TIMESTAMP     DEFAULT CURRENT_TIMESTAMP
+    )`;
+    connection.query(createInvoiceImages, (e) => {
+        if (e) console.error('Error creating invoice_images table:', e.message);
+        else   console.log('✓ invoice_images table ready.');
+        connection.release();
+    });
+});
+
+// Upload invoice image for an order
+app.post('/api/invoice-images', (req, res) => {
+    const { orderId, accountEmail, image } = req.body;
+
+    if (!orderId || !accountEmail || !image) {
+        return res.status(400).json({ error: 'orderId, accountEmail, and image are required.' });
+    }
+
+    const id = 'IMG-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+
+    const sql = `
+        INSERT INTO invoice_images (id, order_id, account_email, image)
+        VALUES (?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE image = VALUES(image), uploaded_at = CURRENT_TIMESTAMP
+    `;
+
+    db.query(sql, [id, orderId, accountEmail.toLowerCase().trim(), image], (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.status(201).json({ success: true, id, message: 'Invoice image saved.' });
+    });
+});
+
+// Get invoice images — by email (customer view) or all (admin view)
+app.get('/api/invoice-images', (req, res) => {
+    const { email } = req.query;
+    let sql = 'SELECT * FROM invoice_images';
+    const values = [];
+
+    if (email) {
+        sql += ' WHERE account_email = ?';
+        values.push(email.toLowerCase().trim());
+    }
+    sql += ' ORDER BY uploaded_at DESC';
+
+    db.query(sql, values, (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json(rows.map(r => ({
+            id:           r.id,
+            orderId:      r.order_id,
+            accountEmail: r.account_email,
+            image:        r.image,
+            uploadedAt:   r.uploaded_at,
+        })));
+    });
+});
+
+// Get invoice image by order ID
+app.get('/api/invoice-images/:orderId', (req, res) => {
+    db.query(
+        'SELECT * FROM invoice_images WHERE order_id = ?',
+        [req.params.orderId],
+        (err, rows) => {
+            if (err)          return res.status(500).json({ error: err.message });
+            if (!rows.length) return res.status(404).json({ message: 'No image found for this order.' });
+            const r = rows[0];
+            res.json({
+                id:           r.id,
+                orderId:      r.order_id,
+                accountEmail: r.account_email,
+                image:        r.image,
+                uploadedAt:   r.uploaded_at,
+            });
+        }
+    );
+});
+
+// Admin: delete invoice image
+app.delete('/api/invoice-images/:id', (req, res) => {
+    db.query('DELETE FROM invoice_images WHERE id = ?', [req.params.id], (err, result) => {
+        if (err)                  return res.status(500).json({ error: err.message });
+        if (!result.affectedRows) return res.status(404).json({ message: 'Invoice image not found.' });
+        res.json({ success: true, message: 'Invoice image deleted.' });
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DASHBOARD ANALYTICS API
+// Auto-calculated from existing orders, products, users tables
+// ─────────────────────────────────────────────────────────────────────────────
+app.get('/api/analytics/summary', (req, res) => {
+    const results = {};
+
+    // 1. Total revenue + total orders count
+    db.query(
+        `SELECT
+            COUNT(*)            AS totalOrders,
+            SUM(total)          AS totalRevenue,
+            SUM(subtotal)       AS totalSubtotal,
+            SUM(shipping_fee)   AS totalShipping
+         FROM orders`,
+        (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            results.totalOrders   = rows[0].totalOrders   || 0;
+            results.totalRevenue  = Number(rows[0].totalRevenue  || 0);
+            results.totalSubtotal = Number(rows[0].totalSubtotal || 0);
+            results.totalShipping = Number(rows[0].totalShipping || 0);
+
+            // 2. Orders by status
+            db.query(
+                `SELECT status, COUNT(*) AS count FROM orders GROUP BY status`,
+                (err2, rows2) => {
+                    if (err2) return res.status(500).json({ error: err2.message });
+                    results.ordersByStatus = {};
+                    rows2.forEach(r => { results.ordersByStatus[r.status] = r.count; });
+
+                    // 3. Total products + total stock units
+                    db.query(
+                        `SELECT COUNT(*) AS totalProducts, SUM(stock) AS totalStock FROM products`,
+                        (err3, rows3) => {
+                            if (err3) return res.status(500).json({ error: err3.message });
+                            results.totalProducts = rows3[0].totalProducts || 0;
+                            results.totalStock    = Number(rows3[0].totalStock || 0);
+
+                            // 4. Total registered users + active users
+                            db.query(
+                                `SELECT
+                                    COUNT(*) AS totalUsers,
+                                    SUM(CASE WHEN status = 'Active' THEN 1 ELSE 0 END) AS activeUsers
+                                 FROM users`,
+                                (err4, rows4) => {
+                                    if (err4) return res.status(500).json({ error: err4.message });
+                                    results.totalUsers  = rows4[0].totalUsers  || 0;
+                                    results.activeUsers = rows4[0].activeUsers || 0;
+
+                                    // 5. Unique customers who placed orders
+                                    db.query(
+                                        `SELECT COUNT(DISTINCT account_email) AS buyingCustomers FROM orders`,
+                                        (err5, rows5) => {
+                                            if (err5) return res.status(500).json({ error: err5.message });
+                                            results.buyingCustomers = rows5[0].buyingCustomers || 0;
+
+                                            // 6. Total items sold (sum of qty inside items JSON)
+                                            db.query(
+                                                `SELECT items FROM orders`,
+                                                (err6, rows6) => {
+                                                    if (err6) return res.status(500).json({ error: err6.message });
+                                                    let totalItemsSold = 0;
+                                                    rows6.forEach(row => {
+                                                        try {
+                                                            const items = JSON.parse(row.items || '[]');
+                                                            items.forEach(item => {
+                                                                totalItemsSold += Number(item.quantity || item.qty || 1);
+                                                            });
+                                                        } catch {}
+                                                    });
+                                                    results.totalItemsSold = totalItemsSold;
+
+                                                    // 7. Top 5 best-selling products by quantity
+                                                    db.query(
+                                                        `SELECT items FROM orders`,
+                                                        (err7, rows7) => {
+                                                            if (err7) return res.status(500).json({ error: err7.message });
+                                                            const productMap = {};
+                                                            rows7.forEach(row => {
+                                                                try {
+                                                                    const items = JSON.parse(row.items || '[]');
+                                                                    items.forEach(item => {
+                                                                        const key = item.name || item.productName || 'Unknown';
+                                                                        const qty = Number(item.quantity || item.qty || 1);
+                                                                        productMap[key] = (productMap[key] || 0) + qty;
+                                                                    });
+                                                                } catch {}
+                                                            });
+                                                            results.topProducts = Object.entries(productMap)
+                                                                .sort((a, b) => b[1] - a[1])
+                                                                .slice(0, 5)
+                                                                .map(([name, qty]) => ({ name, qty }));
+
+                                                            // 8. Recent 5 orders summary
+                                                            db.query(
+                                                                `SELECT id, account_email, customer_name, total, status, date_str
+                                                                 FROM orders ORDER BY created_at DESC LIMIT 5`,
+                                                                (err8, rows8) => {
+                                                                    if (err8) return res.status(500).json({ error: err8.message });
+                                                                    results.recentOrders = rows8.map(r => ({
+                                                                        id:           r.id,
+                                                                        email:        r.account_email,
+                                                                        customerName: r.customer_name,
+                                                                        total:        Number(r.total),
+                                                                        status:       r.status,
+                                                                        date:         r.date_str,
+                                                                    }));
+
+                                                                    // 9. Revenue per day (last 7 days)
+                                                                    db.query(
+                                                                        `SELECT
+                                                                            DATE(created_at) AS day,
+                                                                            SUM(total)       AS revenue,
+                                                                            COUNT(*)         AS orders
+                                                                         FROM orders
+                                                                         WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+                                                                         GROUP BY DATE(created_at)
+                                                                         ORDER BY day ASC`,
+                                                                        (err9, rows9) => {
+                                                                            if (err9) return res.status(500).json({ error: err9.message });
+                                                                            results.revenueLastWeek = rows9.map(r => ({
+                                                                                day:     r.day,
+                                                                                revenue: Number(r.revenue),
+                                                                                orders:  r.orders,
+                                                                            }));
+
+                                                                            res.json(results);
+                                                                        }
+                                                                    );
+                                                                }
+                                                            );
+                                                        }
+                                                    );
+                                                }
+                                            );
+                                        }
+                                    );
+                                }
+                            );
+                        }
+                    );
+                }
+            );
+        }
+    );
+});
+
+// Per-user analytics (for customer dashboard)
+app.get('/api/analytics/user', (req, res) => {
+    const { email } = req.query;
+    if (!email) return res.status(400).json({ error: 'email is required.' });
+
+    const userEmail = email.toLowerCase().trim();
+
+    db.query(
+        `SELECT COUNT(*) AS totalOrders, SUM(total) AS totalSpent, SUM(subtotal) AS totalSubtotal
+         FROM orders WHERE account_email = ?`,
+        [userEmail],
+        (err, rows) => {
+            if (err) return res.status(500).json({ error: err.message });
+            const summary = {
+                totalOrders:   rows[0].totalOrders  || 0,
+                totalSpent:    Number(rows[0].totalSpent    || 0),
+                totalSubtotal: Number(rows[0].totalSubtotal || 0),
+            };
+
+            db.query(
+                `SELECT items FROM orders WHERE account_email = ?`,
+                [userEmail],
+                (err2, rows2) => {
+                    if (err2) return res.status(500).json({ error: err2.message });
+                    let totalItemsBought = 0;
+                    rows2.forEach(row => {
+                        try {
+                            const items = JSON.parse(row.items || '[]');
+                            items.forEach(item => {
+                                totalItemsBought += Number(item.quantity || item.qty || 1);
+                            });
+                        } catch {}
+                    });
+                    summary.totalItemsBought = totalItemsBought;
+
+                    db.query(
+                        `SELECT id, total, status, date_str FROM orders
+                         WHERE account_email = ? ORDER BY created_at DESC LIMIT 5`,
+                        [userEmail],
+                        (err3, rows3) => {
+                            if (err3) return res.status(500).json({ error: err3.message });
+                            summary.recentOrders = rows3.map(r => ({
+                                id:     r.id,
+                                total:  Number(r.total),
+                                status: r.status,
+                                date:   r.date_str,
+                            }));
+                            res.json(summary);
+                        }
+                    );
+                }
+            );
+        }
+    );
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
